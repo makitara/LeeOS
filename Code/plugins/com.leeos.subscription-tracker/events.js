@@ -220,9 +220,13 @@
           setFormError(dom.editorError, '')
           clearFieldInlineError(dom.fPrice)
         })
-        dom.fNextDate.addEventListener('input', () => {
+        dom.fStartDate.addEventListener('input', () => {
           setFormError(dom.editorError, '')
-          clearFieldInlineError(dom.fNextDate)
+          clearFieldInlineError(dom.fStartDate)
+        })
+        dom.fEndDate.addEventListener('input', () => {
+          setFormError(dom.editorError, '')
+          clearFieldInlineError(dom.fEndDate)
         })
         dom.fNewCategoryName.addEventListener('input', () => setFormError(dom.categoryCreatorError, ''))
         dom.chooseIconBtn.addEventListener('click', () => {
@@ -268,10 +272,6 @@
         })
         dom.deleteSubBtn.addEventListener('click', () => {
           void submitEditorDelete()
-        })
-
-        dom.fCycle.addEventListener('change', () => {
-          dom.customDaysWrap.style.display = dom.fCycle.value === 'custom_days' ? '' : 'none'
         })
 
         dom.categoryCreatorForm.addEventListener('submit', async (e) => {

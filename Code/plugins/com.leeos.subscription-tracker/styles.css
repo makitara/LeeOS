@@ -587,7 +587,7 @@
 
       .card-head {
         display: grid;
-        grid-template-columns: 34px 1fr auto;
+        grid-template-columns: 34px minmax(0, 1fr) auto auto;
         gap: 7px;
         align-items: center;
       }
@@ -675,6 +675,21 @@
       .chip.active { border-color: var(--chip-active-line); background: var(--chip-active-bg); color: var(--chip-active-text); }
       .chip.expired { border-color: var(--chip-expired-line); background: var(--chip-expired-bg); color: var(--chip-expired-text); }
       .chip.cancelled { border-color: var(--chip-cancel-line); background: var(--chip-cancel-bg); color: var(--chip-cancel-text); }
+
+      .card-link-btn {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 10px;
+        color: var(--text);
+        background: color-mix(in srgb, var(--surface) 70%, transparent);
+        cursor: pointer;
+      }
+
+      .card-link-btn:hover {
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+        background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
+      }
 
       .kv {
         border: 1px solid var(--line);

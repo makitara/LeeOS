@@ -1,7 +1,7 @@
 # Subscription Tracker（插件规格 / v2）
 
 ## 目标
-- 本地优先管理订阅（名称、分类、续费节奏、状态、图标、备注）。
+- 本地优先管理订阅（名称、分类、起止日期、状态、图标、备注）。
 - 以卡片看板展示续费进度，支持拖拽排序与拖拽快速分类。
 - 保障“保存失败可回滚、失败可见提示”，避免静默数据错乱。
 
@@ -28,7 +28,7 @@ legacy 兼容文件（仅迁移期）：
 ## 数据结构（`tracker-data.json`）
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "updatedAt": "2026-02-17T12:00:00.000Z",
   "categories": [
     { "id": "cat-xxx", "name": "AI" }
@@ -42,9 +42,8 @@ legacy 兼容文件（仅迁移期）：
       "currency": "USD",
       "categoryId": "cat-xxx",
       "status": "active",
-      "billingCycle": "monthly",
-      "customDays": 30,
-      "nextBillingDate": "2026-03-01",
+      "startDate": "2026-02-01",
+      "endDate": "2026-03-01",
       "iconDataUrl": "",
       "note": ""
     }
@@ -54,7 +53,7 @@ legacy 兼容文件（仅迁移期）：
 
 ## 状态口径
 - `active`：正常使用
-- `expired`：由计算得出（到达/超过 `nextBillingDate`）
+- `expired`：由计算得出（到达/超过 `endDate`）
 - `cancelled`：用户明确取消
 
 说明：
@@ -65,6 +64,7 @@ legacy 兼容文件（仅迁移期）：
 - 分类侧栏支持拖入订阅卡进行快速分类。
 - 订阅卡板支持卡片互换式拖拽排序（类似桌面图标换位）。
 - 点击订阅卡进入编辑弹窗（不再保留卡片内独立编辑按钮）。
+- 已配置 URL 的订阅卡支持直接用系统默认浏览器打开。
 - 编辑弹窗进入/退出使用统一过渡动画；`Save/Delete/Cancel/Esc` 共用同一关闭链路。
 - 订阅卡板支持卡片编辑/删除（二步确认）。
 

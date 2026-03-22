@@ -140,7 +140,7 @@
           '- `categories`: 分类数组，每项 `{ id, name }`',
           '- `subscriptions`: 订阅数组，每项包含：',
           '  - `id`, `name`, `url`, `price`, `currency`, `categoryId`, `status`',
-          '  - `billingCycle`, `customDays`, `nextBillingDate`, `iconDataUrl`, `note`',
+          '  - `startDate`, `endDate`, `iconDataUrl`, `note`',
           '',
           '## 兼容旧文件',
           '若目录中仍存在以下旧文件，可以忽略：',
@@ -174,7 +174,7 @@
 
       const saveAll = async () => {
         await writeStorageJson(FILE_DATA, {
-          schemaVersion: 2,
+          schemaVersion: 3,
           updatedAt: new Date().toISOString(),
           categories: state.categories,
           subscriptions: state.subscriptions,

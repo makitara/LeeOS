@@ -26,7 +26,7 @@
         DEFAULT_ICON_SVG,
         defaultIconMarkup,
         daysUntil,
-        cycleDays,
+        resolveDateRange,
         progress,
         resolveCardStatus,
         faviconSources,
@@ -80,9 +80,9 @@
         editorSaveBtn: $('editorSaveBtn'),
         deleteSubBtn: $('deleteSubBtn'),
         fName: $('fName'), fUrl: $('fUrl'), fPrice: $('fPrice'), fCurrency: $('fCurrency'),
-        fCategory: $('fCategory'), fStatus: $('fStatus'), fCycle: $('fCycle'),
-        customDaysWrap: $('customDaysWrap'), fCustomDays: $('fCustomDays'),
-        fNextDate: $('fNextDate'), fNote: $('fNote'), cancelBtn: $('cancelBtn'),
+        fCategory: $('fCategory'), fStatus: $('fStatus'),
+        fStartDate: $('fStartDate'), fEndDate: $('fEndDate'),
+        fNote: $('fNote'), cancelBtn: $('cancelBtn'),
         fIconUpload: $('fIconUpload'),
         chooseIconBtn: $('chooseIconBtn'),
         iconPreview: $('iconPreview'),
@@ -130,7 +130,7 @@
           }
 
           const img = document.createElement('img')
-          const srcs = faviconSources(domain)
+          const srcs = faviconSources(domain, dom.fUrl.value)
           let i = 0
           const fallback = () => {
             setCachedFavicon(domain, null)
@@ -282,7 +282,8 @@
         clearFieldInlineError(dom.fName)
         clearFieldInlineError(dom.fUrl)
         clearFieldInlineError(dom.fPrice)
-        clearFieldInlineError(dom.fNextDate)
+        clearFieldInlineError(dom.fStartDate)
+        clearFieldInlineError(dom.fEndDate)
       }
 
       const applyEditorInlineError = (field, message) => {
@@ -290,7 +291,8 @@
           name: dom.fName,
           url: dom.fUrl,
           price: dom.fPrice,
-          nextBillingDate: dom.fNextDate,
+          startDate: dom.fStartDate,
+          endDate: dom.fEndDate,
         }
         const target = targets[field]
         if (!target) return false
@@ -361,6 +363,23 @@
             btn.disabled = false
           }
         })
+      }
+
+      const openSubscriptionUrl = async (urlLike) => {
+        const url = normalizeUrl(urlLike)
+        if (!url) {
+          showGlobalNotice('Subscription URL is not set.')
+          return
+        }
+        const systemApi = window.LeeOS?.system
+        if (!systemApi?.openExternal) {
+          showGlobalNotice('Open in browser is unavailable in this host.')
+          return
+        }
+        const ok = await systemApi.openExternal(url)
+        if (!ok) {
+          showGlobalNotice('Failed to open subscription URL.')
+        }
       }
 
       const clearCategoryDropStyles = () => {
@@ -985,11 +1004,11 @@
         const cardStatus = resolveCardStatus(s, p)
         const categoryLabel = categoryNameById(s.categoryId)
         const priceValue = normalizePrice(s.price)
+        const { startDate, endDate } = resolveDateRange(s)
         const priceLabel = priceValue === null
           ? 'Not set'
           : `${(s.currency || 'CNY').toUpperCase()} ${priceValue.toFixed(2)}`
-        const nextBillingIso = normalizeIsoDate(s.nextBillingDate, '')
-        const nextBillingLabel = nextBillingIso ? `${nextBillingIso} (${p.leftText})` : 'Not scheduled'
+        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate} (${p.leftText})` : 'Not scheduled'
         const progressTone = cardStatus === 'cancelled'
           ? 'progress-cancelled'
           : (!p.scheduled || cardStatus === 'expired' ? 'progress-expired' : 'progress-active')
@@ -1002,8 +1021,11 @@
               ? defaultIconMarkup()
               : (typeof cachedFavicon === 'string'
                 ? `<img src="${esc(cachedFavicon)}" data-cached-favicon="true" data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`
-                : `<img data-srcs='${esc(JSON.stringify(faviconSources(domain)))}' data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`))
+                : `<img data-srcs='${esc(JSON.stringify(faviconSources(domain, s.url)))}' data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`))
             : defaultIconMarkup())
+        const openUrlButtonMarkup = s.url
+          ? `<button type="button" class="card-link-btn" data-open-url="true" title="Open subscription URL" aria-label="Open subscription URL">Open</button>`
+          : ''
         const card = document.createElement('article')
         card.className = 'card'
         card.draggable = true
@@ -1016,11 +1038,12 @@
               <p class="name">${esc(s.name)}</p>
               <div class="card-submeta"><span class="category-badge">${esc(categoryLabel)}</span></div>
             </div>
+            ${openUrlButtonMarkup}
             <span class="chip ${esc(cardStatus)}">${esc(cardStatus)}</span>
           </div>
 
           <div class="kv kv-primary"><small>Price</small><b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b></div>
-          <div class="kv card-secondary"><small>Next billing</small><b class="${nextBillingIso ? '' : 'is-empty'}">${esc(nextBillingLabel)}</b></div>
+          <div class="kv card-secondary"><small>Billing window</small><b class="${startDate && endDate ? '' : 'is-empty'}">${esc(dateRangeLabel)}</b></div>
           <div class="progress card-secondary ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
         `
 
@@ -1068,6 +1091,14 @@
           }, { once: true })
           img.addEventListener('error', next)
           next()
+        }
+
+        const openUrlButton = card.querySelector('[data-open-url="true"]')
+        if (openUrlButton instanceof HTMLButtonElement) {
+          openUrlButton.addEventListener('click', (e) => {
+            e.stopPropagation()
+            void openSubscriptionUrl(s.url)
+          })
         }
 
         card.addEventListener('click', (e) => {
@@ -1235,9 +1266,8 @@
         dom.editorForm.reset()
         dom.fCurrency.value = 'CNY'
         dom.fStatus.value = 'active'
-        dom.fCycle.value = 'monthly'
-        dom.customDaysWrap.style.display = 'none'
-        dom.fNextDate.value = ''
+        dom.fStartDate.value = ''
+        dom.fEndDate.value = ''
         dom.fCategory.value = ''
         dom.fIconUpload.value = ''
         renderEditorIconPreview()
@@ -1260,12 +1290,11 @@
             dom.fCurrency.value = s.currency || 'CNY'
             dom.fCategory.value = s.categoryId || ''
             dom.fStatus.value = s.status === 'cancelled' ? 'cancelled' : 'active'
-            dom.fCycle.value = s.billingCycle || 'monthly'
-            dom.fCustomDays.value = String(s.customDays || 30)
-            dom.fNextDate.value = normalizeIsoDate(s.nextBillingDate, '')
+            const { startDate, endDate } = resolveDateRange(s)
+            dom.fStartDate.value = startDate
+            dom.fEndDate.value = endDate
             dom.fNote.value = s.note || ''
             state.editorIconDataUrl = sanitizeIconDataUrl(s.iconDataUrl)
-            dom.customDaysWrap.style.display = dom.fCycle.value === 'custom_days' ? '' : 'none'
           }
           renderEditorIconPreview()
           dom.editor.showModal()
@@ -1292,15 +1321,18 @@
         const currency = (dom.fCurrency.value.trim().toUpperCase() || 'CNY').slice(0, 8)
         const categoryId = dom.fCategory.value || ''
         const status = dom.fStatus.value === 'cancelled' ? 'cancelled' : 'active'
-        const billingCycle = dom.fCycle.value
-        const customDays = billingCycle === 'custom_days' ? Math.max(1, Math.floor(Number(dom.fCustomDays.value) || 30)) : 30
-        const nextBillingRaw = dom.fNextDate.value
-        const nextBillingDate = normalizeIsoDate(nextBillingRaw, '')
+        const startDate = normalizeIsoDate(dom.fStartDate.value, '')
+        const endDate = normalizeIsoDate(dom.fEndDate.value, '')
         const note = dom.fNote.value.trim().slice(0, 300)
 
         if (!name) throw createEditorValidationError('name', 'Name is required')
+        if (startDate && !endDate) throw createEditorValidationError('endDate', 'End date is required')
+        if (endDate && !startDate) throw createEditorValidationError('startDate', 'Start date is required')
+        if (startDate && endDate && startDate > endDate) {
+          throw createEditorValidationError('endDate', 'End date must be after start date')
+        }
 
-        return { name, url, price, currency, categoryId, status, billingCycle, customDays, nextBillingDate, iconDataUrl: sanitizeIconDataUrl(state.editorIconDataUrl), note }
+        return { name, url, price, currency, categoryId, status, startDate, endDate, iconDataUrl: sanitizeIconDataUrl(state.editorIconDataUrl), note }
       }
 
       const normalizeLoaded = () => {
@@ -1323,9 +1355,8 @@
               currency: String(s.currency || 'CNY').toUpperCase().slice(0, 8),
               categoryId,
               status: s.status === 'cancelled' ? 'cancelled' : 'active',
-              billingCycle: ['monthly', 'yearly', 'custom_days'].includes(s.billingCycle) ? s.billingCycle : 'monthly',
-              customDays: Number(s.customDays) > 0 ? Math.floor(Number(s.customDays)) : 30,
-              nextBillingDate: normalizeIsoDate(s.nextBillingDate, ''),
+              startDate: resolveDateRange(s).startDate,
+              endDate: resolveDateRange(s).endDate,
               iconDataUrl: sanitizeIconDataUrl(s.iconDataUrl),
               note: String(s.note || '').slice(0, 300),
             }

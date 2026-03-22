@@ -38,6 +38,12 @@
         d.setDate(d.getDate() + days)
         return d.toISOString().slice(0, 10)
       }
+      const diffDays = (fromIso, toIso) => {
+        const from = new Date(fromIso)
+        const to = new Date(toIso)
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return Infinity
+        return Math.floor((to.getTime() - from.getTime()) / 86400000)
+      }
       const esc = (v) => String(v)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -124,20 +130,36 @@
         return Math.floor((b.getTime() - a.getTime()) / 86400000)
       }
 
-      const cycleDays = (s) => {
+      const legacyCycleDays = (s) => {
         if (s.billingCycle === 'yearly') return 365
         if (s.billingCycle === 'custom_days') return Math.max(1, Math.floor(Number(s.customDays) || 30))
         return 30
       }
 
+      const resolveDateRange = (s) => {
+        let startDate = normalizeIsoDate(s.startDate, '')
+        let endDate = normalizeIsoDate(s.endDate || s.nextBillingDate, '')
+        if (!startDate && endDate) {
+          startDate = addDaysIso(endDate, -legacyCycleDays(s))
+        }
+        if (startDate && endDate && startDate > endDate) {
+          const temp = startDate
+          startDate = endDate
+          endDate = temp
+        }
+        return { startDate, endDate }
+      }
+
       const progress = (s) => {
-        const normalizedDate = normalizeIsoDate(s.nextBillingDate, '')
-        if (!normalizedDate) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
-        const total = cycleDays(s)
-        const left = daysUntil(normalizedDate)
+        const { startDate, endDate } = resolveDateRange(s)
+        if (!endDate) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
+        const left = daysUntil(endDate)
         if (!Number.isFinite(left)) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
         if (left <= 0) return { leftText: `${left}d`, pct: 100, scheduled: true, overdue: true }
-        const pct = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
+        if (!startDate) return { leftText: `${left}d`, pct: 0, scheduled: true, overdue: false }
+        const totalDays = Math.max(1, diffDays(startDate, endDate))
+        const elapsedDays = Math.max(0, Math.min(totalDays, diffDays(startDate, todayIso())))
+        const pct = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)))
         return { leftText: `${left}d`, pct, scheduled: true, overdue: false }
       }
 
@@ -147,11 +169,27 @@
         return 'active'
       }
 
-      const faviconSources = (domain) => [
-        `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-        `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
-        `https://${domain}/favicon.ico`,
-      ]
+      const faviconSources = (domain, urlLike = '') => {
+        const candidates = []
+        const normalizedUrl = normalizeUrl(urlLike)
+        let origin = ''
+        try {
+          origin = normalizedUrl ? new URL(normalizedUrl).origin : `https://${domain}`
+        } catch {
+          origin = `https://${domain}`
+        }
+        const pushCandidate = (value) => {
+          const next = String(value || '').trim()
+          if (!next || candidates.includes(next)) return
+          candidates.push(next)
+        }
+        pushCandidate(`https://www.google.com/s2/favicons?sz=128&domain=${domain}`)
+        pushCandidate(`${origin}/favicon.ico`)
+        pushCandidate(`${origin}/apple-touch-icon.png`)
+        pushCandidate(`${origin}/apple-touch-icon-precomposed.png`)
+        pushCandidate(`https://icons.duckduckgo.com/ip3/${domain}.ico`)
+        return candidates
+      }
 
   window.LeeOSSubscriptionTrackerShared = Object.freeze({
     FILE_DATA,
@@ -177,7 +215,7 @@
     DEFAULT_ICON_SVG,
     defaultIconMarkup,
     daysUntil,
-    cycleDays,
+    resolveDateRange,
     progress,
     resolveCardStatus,
     faviconSources,
