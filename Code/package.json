@@ -6,6 +6,7 @@
   "type": "module",
   "main": "dist-electron/main/index.js",
   "scripts": {
+    "clean": "node scripts/clean-local.mjs",
     "dev": "vite",
     "dev:electron": "electron .",
     "build": "tsc -b && vite build",

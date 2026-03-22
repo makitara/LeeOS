@@ -33,6 +33,7 @@
 3. 失败路径检查：至少覆盖一次“写盘失败/非法输入/能力不可用”
 
 ## 打包与发布
+- 本地清理：`npm -C Code run clean`
 - 本地检查：`npm -C Code run check`
 - 本地打包目录版：`npm -C Code run pack:mac`
 - 本地打包发布版：`npm -C Code run dist:mac`
