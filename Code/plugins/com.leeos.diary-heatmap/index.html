@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Diary Heatmap</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --text: #e7eefc;
+        --muted: #95a7c4;
+        --accent: #3fd17b;
+        --surface: rgba(18, 29, 47, 0.44);
+        --surface-strong: rgba(20, 33, 54, 0.62);
+        --line: rgba(161, 182, 220, 0.18);
+
+        --hm-0: #2d333b;
+        --hm-1: #ff6b6b;
+        --hm-2: #ff9f43;
+        --hm-3: #ffd93d;
+        --hm-4: #5aa9ff;
+        --hm-5: #4cd97b;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          color-scheme: light;
+          --text: #0f1d33;
+          --muted: #5f6d88;
+          --accent: #1f9d55;
+          --surface: rgba(255, 255, 255, 0.2);
+          --surface-strong: rgba(255, 255, 255, 0.3);
+          --line: rgba(76, 95, 128, 0.16);
+
+          --hm-0: #ebedf0;
+          --hm-1: #ff5d6c;
+          --hm-2: #ff8d2b;
+          --hm-3: #f5c518;
+          --hm-4: #2f8dff;
+          --hm-5: #20b25f;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif;
+        color: var(--text);
+        background: transparent;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px 9px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        font-size: 12px;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .select {
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: color-mix(in srgb, var(--surface) 62%, transparent);
+        color: var(--text);
+        transition: background-color 120ms ease, border-color 120ms ease;
+      }
+
+      .select {
+        padding: 0 8px;
+        min-width: 78px;
+      }
+
+      select {
+        border: 0;
+        outline: none;
+        height: 100%;
+        width: 100%;
+        background: transparent;
+        color: inherit;
+        font-size: 12px;
+      }
+
+      .icon-btn {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: color-mix(in srgb, var(--surface) 62%, transparent);
+        color: var(--text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        cursor: pointer;
+        transition: background-color 120ms ease, border-color 120ms ease;
+      }
+
+      .icon-btn:hover {
+        background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+        border-color: color-mix(in srgb, var(--line) 70%, var(--text) 30%);
+      }
+
+      .icon-btn:active {
+        transform: translateY(1px);
+      }
+
+      .icon-btn svg {
+        width: 17px;
+        height: 17px;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        display: block;
+      }
+
+      .select:hover {
+        background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+        border-color: color-mix(in srgb, var(--line) 70%, var(--text) 30%);
+      }
+
+      .main {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: 8px;
+        padding: 28px 14px 14px;
+      }
+
+      .stage {
+        min-height: 0;
+        overflow: auto;
+        display: block;
+      }
+
+      .heatmap-panel {
+        min-height: 0;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        min-width: 0;
+        position: relative;
+
+        --cell-size: 12px;
+        --cell-gap: 4px;
+        --dow-w: 28px;
+        --track-gap: 8px;
+        --month-h: 16px;
+        --squares-w: 840px;
+      }
+
+      .hm-months-row,
+      .hm-body,
+      .hm-legend-row {
+        display: grid;
+        grid-template-columns: var(--dow-w) var(--track-gap) var(--squares-w);
+      }
+
+      .hm-months-row {
+        align-items: end;
+        min-height: var(--month-h);
+      }
+
+      .grid-months {
+        grid-column: 3;
+        position: relative;
+        height: var(--month-h);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .grid-month {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        white-space: nowrap;
+      }
+
+      .hm-body {
+        margin-top: 8px;
+        align-items: start;
+      }
+
+      .grid-dow {
+        grid-column: 1;
+        display: grid;
+        grid-auto-rows: var(--cell-size);
+        row-gap: var(--cell-gap);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .grid-squares {
+        grid-column: 3;
+        width: var(--squares-w);
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: var(--cell-size);
+        column-gap: var(--cell-gap);
+        row-gap: var(--cell-gap);
+      }
+
+      .sq {
+        width: var(--cell-size);
+        height: var(--cell-size);
+        border-radius: 2px;
+        background: var(--hm-0);
+      }
+
+      .sq.has-entry {
+        cursor: pointer;
+      }
+
+      .sq.has-entry:hover {
+        outline: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+        outline-offset: 1px;
+      }
+
+      .sq.level-1 { background: var(--hm-1); }
+      .sq.level-2 { background: var(--hm-2); }
+      .sq.level-3 { background: var(--hm-3); }
+      .sq.level-4 { background: var(--hm-4); }
+      .sq.level-5 { background: var(--hm-5); }
+
+      .sq.outside {
+        opacity: 0;
+      }
+
+      .hm-legend-row {
+        margin-top: 6px;
+      }
+
+      .legend {
+        grid-column: 3;
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+      }
+
+      .legend__scale {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+
+      .legend__item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .legend__dot {
+        width: var(--cell-size);
+        height: var(--cell-size);
+        border-radius: 2px;
+      }
+
+      .legend__dot.l0 { background: var(--hm-0); }
+      .legend__dot.l1 { background: var(--hm-1); }
+      .legend__dot.l2 { background: var(--hm-2); }
+      .legend__dot.l3 { background: var(--hm-3); }
+      .legend__dot.l4 { background: var(--hm-4); }
+      .legend__dot.l5 { background: var(--hm-5); }
+
+      .heatmap-tooltip {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translate(-9999px, -9999px);
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--surface-strong) 88%, #101826);
+        border: 1px solid var(--line);
+        color: var(--text);
+        font-size: 11px;
+        line-height: 1;
+        pointer-events: none;
+        white-space: nowrap;
+        z-index: 10;
+      }
+
+      .empty {
+        border: 1px dashed var(--line);
+        border-radius: 11px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 11px;
+        padding: 9px 10px;
+      }
+
+      .empty .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Diary Heatmap</div>
+      <div class="controls">
+        <button class="icon-btn" type="button" id="openFolderBtn" aria-label="Open diary folder" title="Open diary folder">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 7.5h6l2 2h10v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <path d="M3 9.5V6a2 2 0 0 1 2-2h4l2 2h3"></path>
+          </svg>
+        </button>
+        <button class="icon-btn" type="button" id="createTodayBtn" aria-label="Create today diary" title="Create today diary">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+        </button>
+        <label class="select" aria-label="year">
+          <select id="yearSelect"></select>
+        </label>
+        <button class="icon-btn" type="button" id="refreshBtn" aria-label="Refresh" title="Refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85 1.03 6.48 2.69L21 8"></path>
+            <path d="M21 3v5h-5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="stage">
+        <section class="heatmap-panel" id="heatmapPanel">
+          <div class="hm-months-row">
+            <div class="grid-months" id="gridMonths"></div>
+          </div>
+
+          <div class="hm-body" id="gridBody">
+            <div class="grid-dow" id="gridDow"></div>
+            <div class="grid-squares" id="gridSquares"></div>
+          </div>
+
+          <div class="hm-legend-row">
+            <div class="legend">
+              <span class="legend__scale">
+                <span class="legend__item"><span class="legend__dot l0"></span><span>No diary</span></span>
+                <span class="legend__item"><span class="legend__dot l1"></span><span>Very low</span></span>
+                <span class="legend__item"><span class="legend__dot l2"></span><span>Low</span></span>
+                <span class="legend__item"><span class="legend__dot l3"></span><span>Neutral</span></span>
+                <span class="legend__item"><span class="legend__dot l4"></span><span>Good</span></span>
+                <span class="legend__item"><span class="legend__dot l5"></span><span>Great</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="heatmap-tooltip" id="heatmapTooltip" hidden></div>
+        </section>
+
+      </section>
+
+      <section class="empty" id="emptyHint" hidden>
+        No diary entries yet.
+      </section>
+    </main>
+
+    <script>
+      const PLUGIN_ID = 'com.leeos.diary-heatmap'
+      const ENTRY_DIR = 'entries'
+      const ENTRY_RE = /^(\d{4})-(\d{2})-(\d{2})\.md$/
+      const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      const MIN_YEAR = 2025
+      const EN_DATE_FMT = new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+      const $ = (id) => {
+        const el = document.getElementById(id)
+        if (!el) throw new Error(`Missing #${id}`)
+        return el
+      }
+
+      const clamp = (n, min, max) => Math.max(min, Math.min(n, max))
+
+      const toIso = (dateUtc) => {
+        const y = dateUtc.getUTCFullYear()
+        const m = String(dateUtc.getUTCMonth() + 1).padStart(2, '0')
+        const d = String(dateUtc.getUTCDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+
+      const localTodayIso = () => {
+        const now = new Date()
+        const y = now.getFullYear()
+        const m = String(now.getMonth() + 1).padStart(2, '0')
+        const d = String(now.getDate()).padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+
+      const parseIso = (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+        if (!m) return null
+        const y = Number(m[1])
+        const mo = Number(m[2])
+        const d = Number(m[3])
+        const dt = new Date(Date.UTC(y, mo - 1, d))
+        if (dt.getUTCFullYear() !== y || dt.getUTCMonth() + 1 !== mo || dt.getUTCDate() !== d) return null
+        return dt
+      }
+
+      const addDays = (dt, days) => new Date(dt.getTime() + days * 86400000)
+      const monIdx = (dt) => (dt.getUTCDay() + 6) % 7
+      const mondayOnOrBefore = (dt) => addDays(dt, -monIdx(dt))
+      const sundayOnOrAfter = (dt) => addDays(dt, 6 - monIdx(dt))
+      const formatEnglishDate = (dt) => EN_DATE_FMT.format(dt)
+
+      const safeReadDir = async (path) => {
+        try {
+          const res = await window.LeeOS.fs.readDir(path)
+          return Array.isArray(res) ? res : []
+        } catch {
+          return []
+        }
+      }
+
+      const safeReadText = async (path) => {
+        try {
+          if (!window.LeeOS?.fs?.readText) return ''
+          const text = await window.LeeOS.fs.readText(path)
+          return typeof text === 'string' ? text : ''
+        } catch {
+          return ''
+        }
+      }
+
+      const parseFrontmatter = (markdown) => {
+        if (typeof markdown !== 'string' || markdown.length < 8) return {}
+        const normalized = markdown.replace(/\r\n/g, '\n')
+        if (!normalized.startsWith('---\n')) return {}
+        const end = normalized.indexOf('\n---', 4)
+        if (end < 0) return {}
+        const content = normalized.slice(4, end)
+        const obj = {}
+        for (const rawLine of content.split('\n')) {
+          const line = rawLine.trim()
+          if (!line || line.startsWith('#')) continue
+          const m = /^([A-Za-z0-9_-]+)\s*:\s*(.+)$/.exec(line)
+          if (!m) continue
+          const key = m[1].toLowerCase()
+          let value = m[2].trim()
+          if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+          ) {
+            value = value.slice(1, -1).trim()
+          }
+          obj[key] = value
+        }
+        return obj
+      }
+
+      const normalizeMoodLevel = (value) => {
+        if (value === null || value === undefined) return null
+        if (typeof value === 'number') {
+          if (!Number.isInteger(value) || value < 1 || value > 5) return null
+          return value
+        }
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          if (!/^[1-5]$/.test(trimmed)) return null
+          return Number(trimmed)
+        }
+        return null
+      }
+
+      const moodLevelFromMarkdown = (markdown) => {
+        const fm = parseFrontmatter(markdown)
+        return normalizeMoodLevel(fm.mood)
+      }
+
+      const makeEntryTemplate = (iso) =>
+        `---\ndate: ${iso}\nmood: 3\n---\n\n# ${iso}\n\n`
+
+      const loadIndex = async () => {
+        const filenames = (await safeReadDir(ENTRY_DIR))
+          .map((entry) => (entry && typeof entry.name === 'string' ? entry.name : ''))
+          .filter(Boolean)
+        const days = new Set()
+        const years = new Set()
+        const moodByDay = new Map()
+        const items = []
+
+        for (const name of filenames) {
+          const m = ENTRY_RE.exec(name)
+          if (!m) continue
+          const iso = `${m[1]}-${m[2]}-${m[3]}`
+          const dt = parseIso(iso)
+          if (!dt) continue
+          days.add(iso)
+          years.add(dt.getUTCFullYear())
+          items.push({ iso, name })
+        }
+
+        await Promise.all(
+          items.map(async (item) => {
+            const raw = await safeReadText(`${ENTRY_DIR}/${item.name}`)
+            const level = moodLevelFromMarkdown(raw)
+            // Keep filename-based day existence; mood missing falls back to neutral.
+            moodByDay.set(item.iso, level ?? 3)
+          })
+        )
+
+        return { days, years, moodByDay, matched: days.size }
+      }
+
+      const fillYearSelect = (years, selected) => {
+        const select = $('yearSelect')
+        select.innerHTML = ''
+        ;[...years].sort((a, b) => b - a).forEach((y) => {
+          const opt = document.createElement('option')
+          opt.value = String(y)
+          opt.textContent = String(y)
+          if (y === selected) opt.selected = true
+          select.appendChild(opt)
+        })
+      }
+
+      const computeHeatmapMetrics = (panelWidth, totalWeeks) => {
+        const width = Math.max(240, panelWidth)
+        let chosen = null
+
+        // Pick the largest readable cell size that still fits the full year in one screen.
+        for (let cellSize = 18; cellSize >= 4; cellSize -= 1) {
+          const cellGap = clamp(Math.round(cellSize * 0.24), 1, 5)
+          const dowWidth = clamp(Math.round(cellSize * 1.9), 14, 34)
+          const trackGap = clamp(Math.round(cellSize * 0.5), 4, 10)
+          const squaresW = totalWeeks * cellSize + (totalWeeks - 1) * cellGap
+          const totalW = dowWidth + trackGap + squaresW
+          if (totalW <= width) {
+            chosen = { cellSize, cellGap, dowWidth, trackGap, squaresW }
+            break
+          }
+        }
+
+        if (!chosen) {
+          const cellSize = 4
+          const cellGap = 1
+          const dowWidth = 14
+          const trackGap = 4
+          const squaresW = totalWeeks * cellSize + (totalWeeks - 1) * cellGap
+          chosen = { cellSize, cellGap, dowWidth, trackGap, squaresW }
+        }
+
+        const monthH = clamp(Math.round(chosen.cellSize * 1.2), 12, 24)
+        return { ...chosen, monthH }
+      }
+
+      const renderGrid = (year, daysSet, moodByDay) => {
+        const panel = $('heatmapPanel')
+        const months = $('gridMonths')
+        const dow = $('gridDow')
+        const squares = $('gridSquares')
+        months.innerHTML = ''
+        dow.innerHTML = ''
+        squares.innerHTML = ''
+
+        ;['Mon', '', 'Wed', '', 'Fri', '', ''].forEach((name) => {
+          const d = document.createElement('div')
+          d.textContent = name
+          dow.appendChild(d)
+        })
+
+        const jan1 = new Date(Date.UTC(year, 0, 1))
+        const dec31 = new Date(Date.UTC(year, 11, 31))
+        const start = mondayOnOrBefore(jan1)
+        const end = sundayOnOrAfter(dec31)
+        const weeks = []
+        for (let d = new Date(start); d <= end; d = addDays(d, 7)) weeks.push(new Date(d))
+
+        const totalWeeks = weeks.length
+        const metrics = computeHeatmapMetrics(panel.clientWidth, totalWeeks)
+        panel.style.setProperty('--cell-size', `${metrics.cellSize}px`)
+        panel.style.setProperty('--cell-gap', `${metrics.cellGap}px`)
+        panel.style.setProperty('--dow-w', `${metrics.dowWidth}px`)
+        panel.style.setProperty('--track-gap', `${metrics.trackGap}px`)
+        panel.style.setProperty('--month-h', `${metrics.monthH}px`)
+        panel.style.setProperty('--squares-w', `${metrics.squaresW}px`)
+
+        squares.style.gridTemplateRows = `repeat(7, ${metrics.cellSize}px)`
+
+        weeks.forEach((week) => {
+          for (let i = 0; i < 7; i += 1) {
+            const dt = addDays(week, i)
+            const inYear = dt >= jan1 && dt <= dec31
+            const iso = toIso(dt)
+            const sq = document.createElement('div')
+            sq.className = 'sq'
+            if (!inYear) sq.classList.add('outside')
+            if (inYear) sq.dataset.dateLabel = formatEnglishDate(dt)
+            if (inYear && daysSet.has(iso)) {
+              const moodLevel = clamp(Number(moodByDay.get(iso) || 3), 1, 5)
+              sq.classList.add('has-entry')
+              sq.classList.add(`level-${moodLevel}`)
+              sq.dataset.iso = iso
+            }
+            squares.appendChild(sq)
+          }
+        })
+
+        const step = metrics.cellSize + metrics.cellGap
+        for (let m = 0; m < 12; m += 1) {
+          const label = document.createElement('div')
+          label.className = 'grid-month'
+          label.textContent = MONTHS[m]
+          const firstDay = new Date(Date.UTC(year, m, 1))
+          const weekIndex = Math.floor((firstDay.getTime() - start.getTime()) / (7 * 86400000))
+          label.style.left = `${Math.max(0, weekIndex * step)}px`
+          months.appendChild(label)
+        }
+      }
+
+      const setEmpty = (show) => {
+        $('emptyHint').hidden = !show
+      }
+
+      const main = async () => {
+        window.parent.postMessage({ type: 'LeeOS:ping', pluginId: PLUGIN_ID }, '*')
+        if (!window.LeeOS?.fs?.readDir) {
+          setEmpty(true)
+          return
+        }
+
+        const now = new Date()
+        const currentYear = now.getFullYear()
+        const state = { year: currentYear }
+
+        let cachedDays = new Set()
+        let cachedMoodByDay = new Map()
+        const gridSquares = $('gridSquares')
+        const heatmapPanel = $('heatmapPanel')
+        const tip = $('heatmapTooltip')
+        const openBtn = $('openFolderBtn')
+        const createBtn = $('createTodayBtn')
+        let hoverLabel = ''
+        let pointerX = 0
+        let pointerY = 0
+        let tipRaf = 0
+        let renderRaf = 0
+        let titleTimer = 0
+
+        const placeTooltip = () => {
+          tipRaf = 0
+          if (tip.hidden) return
+          const panelRect = heatmapPanel.getBoundingClientRect()
+          const pad = 8
+          const tipW = tip.offsetWidth || 0
+          const tipH = tip.offsetHeight || 0
+          const maxX = Math.max(pad, panelRect.width - tipW - pad)
+          const maxY = Math.max(pad, panelRect.height - tipH - pad)
+          const x = clamp(pointerX - panelRect.left + 12, pad, maxX)
+          const y = clamp(pointerY - panelRect.top + 14, pad, maxY)
+          tip.style.transform = `translate(${x}px, ${y}px)`
+        }
+
+        const render = () => {
+          renderGrid(state.year, cachedDays, cachedMoodByDay)
+        }
+
+        const scheduleRender = () => {
+          if (renderRaf) return
+          renderRaf = window.requestAnimationFrame(() => {
+            renderRaf = 0
+            render()
+          })
+        }
+
+        const refresh = async () => {
+          const { days, years, moodByDay, matched } = await loadIndex()
+          cachedDays = days
+          cachedMoodByDay = moodByDay
+          setEmpty(matched === 0)
+
+          const allYears = new Set(years)
+          for (let y = MIN_YEAR; y <= currentYear; y += 1) allYears.add(y)
+          if (!allYears.has(state.year)) state.year = Math.max(...allYears)
+          fillYearSelect(allYears, state.year)
+
+          render()
+        }
+
+        const flashTitle = (button, text, resetText) => {
+          button.setAttribute('title', text)
+          if (titleTimer) window.clearTimeout(titleTimer)
+          titleTimer = window.setTimeout(() => {
+            button.setAttribute('title', resetText)
+          }, 1800)
+        }
+
+        const tryOpenEntry = async (iso) => {
+          const fsApi = window.LeeOS?.fs
+          if (!fsApi) return false
+          if (typeof fsApi.openFile === 'function') {
+            try {
+              const opened = await fsApi.openFile(`${ENTRY_DIR}/${iso}.md`)
+              if (opened) return true
+            } catch {
+              // Fall through to openDir fallback.
+            }
+          }
+          return (await fsApi.openDir?.(ENTRY_DIR)) || false
+        }
+
+        $('yearSelect').addEventListener('change', () => {
+          state.year = Number($('yearSelect').value)
+          render()
+        })
+
+        $('refreshBtn').addEventListener('click', () => {
+          refresh().catch(() => {})
+        })
+
+        $('openFolderBtn').addEventListener('click', async () => {
+          const prevTitle = openBtn.getAttribute('title') || 'Open diary folder'
+          try {
+            const opened = (await window.LeeOS?.fs?.openDir?.('entries')) || false
+            if (opened) {
+              flashTitle(openBtn, 'Opened entries/', prevTitle)
+              return
+            }
+            flashTitle(openBtn, 'Host API missing', prevTitle)
+          } catch {
+            flashTitle(openBtn, 'Open failed', prevTitle)
+          }
+        })
+
+        createBtn.addEventListener('click', async () => {
+          const prevTitle = createBtn.getAttribute('title') || 'Create today diary'
+          const today = localTodayIso()
+          const path = `${ENTRY_DIR}/${today}.md`
+          try {
+            if (!cachedDays.has(today)) {
+              await window.LeeOS?.fs?.writeText?.(path, makeEntryTemplate(today))
+            }
+            const opened = await tryOpenEntry(today)
+            if (opened) {
+              flashTitle(createBtn, 'Created today entry', prevTitle)
+            } else {
+              flashTitle(createBtn, 'Created, open manually', prevTitle)
+            }
+            state.year = Number(today.slice(0, 4))
+            await refresh()
+          } catch {
+            flashTitle(createBtn, 'Create failed', prevTitle)
+          }
+        })
+
+        gridSquares.addEventListener('mouseover', (event) => {
+          const target = event.target
+          if (!(target instanceof HTMLElement) || !target.classList.contains('sq')) return
+          const label = target.dataset.dateLabel
+          if (!label) {
+            tip.hidden = true
+            hoverLabel = ''
+            return
+          }
+          if (label !== hoverLabel) {
+            tip.textContent = label
+            hoverLabel = label
+          }
+          tip.hidden = false
+        })
+
+        gridSquares.addEventListener('mousemove', (event) => {
+          if (tip.hidden) return
+          pointerX = event.clientX
+          pointerY = event.clientY
+          if (!tipRaf) tipRaf = window.requestAnimationFrame(placeTooltip)
+        })
+
+        gridSquares.addEventListener('mouseleave', () => {
+          tip.hidden = true
+          hoverLabel = ''
+        })
+
+        gridSquares.addEventListener('click', async (event) => {
+          if (event.button !== 0) return
+          const target = event.target
+          if (!(target instanceof HTMLElement) || !target.classList.contains('sq')) return
+          const iso = target.dataset.iso
+          if (!iso) return
+          await tryOpenEntry(iso)
+        })
+
+        const ro = new ResizeObserver(() => scheduleRender())
+        ro.observe($('heatmapPanel'))
+
+        await refresh()
+      }
+
+      main().catch(() => {
+        setEmpty(true)
+      })
+    </script>
+  </body>
+</html>

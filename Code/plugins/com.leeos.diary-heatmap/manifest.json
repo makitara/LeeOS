@@ -1,0 +1,10 @@
+{
+  "id": "com.leeos.diary-heatmap",
+  "name": "Diary Heatmap",
+  "version": "1.0.0",
+  "description": "Diary heatmap based on entries/YYYY-MM-DD.md with frontmatter mood (1-5).",
+  "entry": "index.html",
+  "icon": "icon-v2.svg",
+  "order": 1,
+  "permissions": []
+}
