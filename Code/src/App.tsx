@@ -1,12 +1,33 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PluginEntry } from './env'
-import { LEEOS_METHOD } from './shared/capabilities'
+import HomePanel from './home/HomePanel'
+import { LEEOS_METHOD, type LeeOSMethod } from './shared/capabilities'
 import './App.css'
 
 type PluginFrameInfo = {
   iframe: HTMLIFrameElement
   pluginId: string
   origin: string
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 3_000
+const HOME_PLUGIN_ID = 'leeos:home'
+const HOME_SIDEBAR_ITEM = {
+  id: HOME_PLUGIN_ID,
+  name: 'Home',
+  icon: '◎',
+} as const
+
+const REQUEST_TIMEOUT_MS: Partial<Record<LeeOSMethod, number>> = {
+  [LEEOS_METHOD.pluginsList]: DEFAULT_REQUEST_TIMEOUT_MS,
+  [LEEOS_METHOD.fsReadText]: DEFAULT_REQUEST_TIMEOUT_MS,
+  [LEEOS_METHOD.fsReadJson]: DEFAULT_REQUEST_TIMEOUT_MS,
+  [LEEOS_METHOD.fsReadDir]: DEFAULT_REQUEST_TIMEOUT_MS,
+  [LEEOS_METHOD.fsOpenDir]: 5_000,
+  [LEEOS_METHOD.fsOpenFile]: 5_000,
+  [LEEOS_METHOD.fsWriteText]: 8_000,
+  [LEEOS_METHOD.fsWriteJson]: 8_000,
+  [LEEOS_METHOD.fsDelete]: 8_000,
 }
 
 const resolvePluginFrameOrigin = (entryUrl?: string) => {
@@ -24,315 +45,15 @@ const resolvePluginFrameOrigin = (entryUrl?: string) => {
   }
 }
 
-type WeatherReadyState = {
-  status: 'ready'
-  location: string
-  temperature: number
-  high: number | null
-  low: number | null
-  condition: string
-  icon: string
-  weatherCode: number
-  updatedAt: string
-}
-
-type WeatherState =
-  | { status: 'loading'; message: string }
-  | WeatherReadyState
-  | { status: 'error'; message: string }
-
-type OpenMeteoForecastResponse = {
-  current?: {
-    temperature_2m?: number
-    weather_code?: number
-  }
-  daily?: {
-    temperature_2m_max?: number[]
-    temperature_2m_min?: number[]
-  }
-}
-
-type OpenMeteoReverseResponse = {
-  results?: Array<{
-    name?: string
-    admin1?: string
-    country?: string
-  }>
-}
-
-type NominatimReverseResponse = {
-  display_name?: string
-  address?: {
-    city?: string
-    town?: string
-    village?: string
-    municipality?: string
-    city_district?: string
-    suburb?: string
-    borough?: string
-    county?: string
-    state_district?: string
-    state?: string
-    region?: string
-  }
-}
-
-type BigDataCloudReverseResponse = {
-  city?: string
-  locality?: string
-  principalSubdivision?: string
-}
-
-const getCurrentPosition = () =>
-  new Promise<GeolocationPosition>((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported in this environment.'))
-      return
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: 8000,
-      maximumAge: 10 * 60 * 1000,
-    })
-  })
-
-const formatWeatherError = (error: unknown) => {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const geoError = error as GeolocationPositionError
-    if (geoError.code === geoError.PERMISSION_DENIED) {
-      return 'Location permission was denied. Please allow LeeOS in system settings.'
-    }
-    if (geoError.code === geoError.POSITION_UNAVAILABLE) {
-      return 'Current location is unavailable. Please try again.'
-    }
-    if (geoError.code === geoError.TIMEOUT) {
-      return 'Location request timed out. Please try again.'
-    }
-  }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return 'Failed to load weather. Please try again.'
-}
-
-const weatherCodeToView = (code: number) => {
-  if (code === 0) {
-    return { condition: 'Clear', icon: '☀️' }
-  }
-  if (code === 1 || code === 2) {
-    return { condition: 'Mostly Clear', icon: '🌤️' }
-  }
-  if (code === 3) {
-    return { condition: 'Cloudy', icon: '☁️' }
-  }
-  if (code === 45 || code === 48) {
-    return { condition: 'Foggy', icon: '🌫️' }
-  }
-  if (code >= 51 && code <= 57) {
-    return { condition: 'Drizzle', icon: '🌦️' }
-  }
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) {
-    return { condition: 'Rain', icon: '🌧️' }
-  }
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
-    return { condition: 'Snow', icon: '🌨️' }
-  }
-  if (code >= 95 && code <= 99) {
-    return { condition: 'Thunderstorm', icon: '⛈️' }
-  }
-  return { condition: 'Unknown', icon: '🌡️' }
-}
-
-const weatherCodeToTheme = (code: number) => {
-  if (code === 0 || code === 1 || code === 2) {
-    return 'clear'
-  }
-  if (code === 3) {
-    return 'cloudy'
-  }
-  if (code === 45 || code === 48) {
-    return 'fog'
-  }
-  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
-    return 'rain'
-  }
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
-    return 'snow'
-  }
-  if (code >= 95 && code <= 99) {
-    return 'storm'
-  }
-  return 'neutral'
-}
-
-const fallbackCoordinateLabel = (latitude: number, longitude: number) => {
-  return `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`
-}
-
-const joinLocationParts = (...parts: Array<string | undefined>) => {
-  const unique = new Set<string>()
-  for (const part of parts) {
-    const value = part?.trim()
-    if (!value) {
-      continue
-    }
-    unique.add(value)
-  }
-  return Array.from(unique).join(' · ')
-}
-
-const isDistrictLike = (value: string) => {
-  return /(district|county|borough|suburb|ward|township)/i.test(value)
-}
-
-const getCityFromDisplayName = (displayName: string, district?: string) => {
-  const tokens = displayName
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-  if (tokens.length === 0) {
-    return ''
-  }
-  if (district && tokens.length > 1) {
-    const first = tokens[0].toLowerCase()
-    const needle = district.toLowerCase()
-    if (first.includes(needle)) {
-      return tokens[1]
-    }
-  }
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (index === 0 && isDistrictLike(token)) {
-      continue
-    }
-    if (isDistrictLike(token)) {
-      continue
-    }
-    return token
-  }
-  return tokens[0]
-}
-
-const resolveCityName = async (latitude: number, longitude: number, signal: AbortSignal) => {
-  let openMeteoCity = ''
-  let openMeteoRegion = ''
-  let districtOnly = ''
-
-  try {
-    const reverseResponse = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&language=en&count=1&format=json`,
-      { signal },
-    )
-    if (reverseResponse.ok) {
-      const reverseData = (await reverseResponse.json()) as OpenMeteoReverseResponse
-      const firstResult = reverseData.results?.[0]
-      openMeteoCity = firstResult?.name?.trim() || ''
-      openMeteoRegion = firstResult?.admin1?.trim() || ''
-    }
-  } catch {
-    // Fall through to the next provider.
-  }
-
-  try {
-    const nominatimResponse = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
-      { signal },
-    )
-    if (nominatimResponse.ok) {
-      const data = (await nominatimResponse.json()) as NominatimReverseResponse
-      const city = data.address?.city
-        || data.address?.town
-        || data.address?.village
-        || data.address?.municipality
-      const district = data.address?.city_district
-        || data.address?.suburb
-        || data.address?.borough
-        || data.address?.county
-      const fallbackRegion = data.address?.state_district || data.address?.state || data.address?.region
-      if (city) {
-        return joinLocationParts(city, district)
-      }
-      if (fallbackRegion) {
-        return joinLocationParts(fallbackRegion, district)
-      }
-      if (data.display_name) {
-        const cityFromDisplay = getCityFromDisplayName(data.display_name, district)
-        if (cityFromDisplay) {
-          return joinLocationParts(cityFromDisplay, district)
-        }
-      }
-      if (district) {
-        districtOnly = district
-      }
-    }
-  } catch {
-    // Ignore and fallback to coordinates.
-  }
-
-  try {
-    const bdcResponse = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`,
-      { signal },
-    )
-    if (bdcResponse.ok) {
-      const data = (await bdcResponse.json()) as BigDataCloudReverseResponse
-      const city = data.city || data.locality
-      if (city && districtOnly) {
-        return joinLocationParts(city, districtOnly)
-      }
-      if (city) {
-        return city
-      }
-      if (data.principalSubdivision && districtOnly) {
-        return joinLocationParts(data.principalSubdivision, districtOnly)
-      }
-      if (data.principalSubdivision) {
-        return data.principalSubdivision
-      }
-    }
-  } catch {
-    // Ignore and fallback to next candidate.
-  }
-
-  if (openMeteoCity && districtOnly) {
-    return joinLocationParts(openMeteoCity, districtOnly)
-  }
-  if (openMeteoCity || openMeteoRegion) {
-    return joinLocationParts(openMeteoCity, openMeteoRegion)
-  }
-  if (districtOnly) {
-    return districtOnly
-  }
-
-  return fallbackCoordinateLabel(latitude, longitude)
-}
-
-const getGreetingText = (now: Date) => {
-  const hour = now.getHours()
-  if (hour < 6) {
-    return '夜深了'
-  }
-  if (hour < 12) {
-    return '早上好'
-  }
-  if (hour < 18) {
-    return '下午好'
-  }
-  return '晚上好'
-}
-
 function App() {
   const [plugins, setPlugins] = useState<PluginEntry[]>([])
-  const [activePluginId, setActivePluginId] = useState('leeos:home')
+  const [activePluginId, setActivePluginId] = useState(HOME_PLUGIN_ID)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const frameLookupCache = useRef(new WeakMap<object, PluginFrameInfo>())
-  const currentPluginId = activePluginId === 'leeos:home' || plugins.some((plugin) => plugin.id === activePluginId)
+  const currentPluginId = activePluginId === HOME_PLUGIN_ID || plugins.some((plugin) => plugin.id === activePluginId)
     ? activePluginId
-    : 'leeos:home'
-  const sidebarItems = [
-    { id: 'leeos:home', name: 'Home', icon: '◎' },
-    ...plugins,
-  ]
+    : HOME_PLUGIN_ID
+  const sidebarItems = [HOME_SIDEBAR_ITEM, ...plugins]
 
   useEffect(() => {
     let isMounted = true
@@ -398,24 +119,6 @@ function App() {
     method?: string
     params?: unknown
   }) => {
-    const getRequestTimeoutMs = (method?: string) => {
-      switch (method) {
-        case LEEOS_METHOD.pluginsList:
-        case LEEOS_METHOD.fsReadText:
-        case LEEOS_METHOD.fsReadJson:
-        case LEEOS_METHOD.fsReadDir:
-          return 3000
-        case LEEOS_METHOD.fsOpenDir:
-        case LEEOS_METHOD.fsOpenFile:
-          return 5000
-        case LEEOS_METHOD.fsWriteText:
-        case LEEOS_METHOD.fsWriteJson:
-        case LEEOS_METHOD.fsDelete:
-          return 8000
-        default:
-          return 3000
-      }
-    }
     const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
       let timeoutId: ReturnType<typeof setTimeout> | null = null
       const timeout = new Promise<never>((_, reject) => {
@@ -443,7 +146,9 @@ function App() {
       return value as Record<string, unknown>
     }
     const params = paramsRecord(payload.params) ?? {}
-    const requestTimeoutMs = getRequestTimeoutMs(payload.method)
+    const requestTimeoutMs = payload.method
+      ? REQUEST_TIMEOUT_MS[payload.method as LeeOSMethod] ?? DEFAULT_REQUEST_TIMEOUT_MS
+      : DEFAULT_REQUEST_TIMEOUT_MS
     switch (payload.method) {
       case LEEOS_METHOD.pluginsList:
         return withTimeout(window.LeeOS.plugins.list().then((data) => ({ ok: true, data })), requestTimeoutMs)
@@ -636,8 +341,8 @@ function App() {
           </nav>
         </aside>
         <section className="detail">
-          {currentPluginId === 'leeos:home' ? <HomePanel /> : null}
-          {currentPluginId !== 'leeos:home' ? (
+          {currentPluginId === HOME_PLUGIN_ID ? <HomePanel /> : null}
+          {currentPluginId !== HOME_PLUGIN_ID ? (
             <DetailPanel key={currentPluginId} plugin={plugins.find((plugin) => plugin.id === currentPluginId)} />
           ) : null}
         </section>
@@ -704,181 +409,6 @@ function SidebarItem({ item, isActive, onSelect }: SidebarItemProps) {
     </button>
   )
 }
-
-function HomePanel() {
-  const [now, setNow] = useState(() => new Date())
-  const [weather, setWeather] = useState<WeatherState>({
-    status: 'loading',
-    message: 'Loading weather...',
-  })
-  const [lastReadyWeather, setLastReadyWeather] = useState<WeatherReadyState | null>(null)
-  const [weatherReloadToken, setWeatherReloadToken] = useState(0)
-  const greeting = getGreetingText(now)
-  const timeText = new Intl.DateTimeFormat('en-US', {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(now)
-  const visibleWeather = weather.status === 'ready' ? weather : lastReadyWeather
-  const weatherThemeClass =
-    weather.status === 'ready'
-      ? `is-${weatherCodeToTheme(weather.weatherCode)}`
-      : visibleWeather
-        ? `is-${weatherCodeToTheme(visibleWeather.weatherCode)}`
-        : 'is-neutral'
-  const tempLabel = visibleWeather ? `${visibleWeather.temperature}°C` : '--°C'
-  const conditionLabel = visibleWeather?.condition ?? '--'
-  const iconLabel = visibleWeather?.icon ?? '--'
-  const cardLocationLabel = visibleWeather?.location ?? '--'
-  const highLowLabel = `H ${visibleWeather?.high ?? '--'}° / L ${visibleWeather?.low ?? '--'}°`
-  const updatedLabel = visibleWeather ? `Updated ${visibleWeather.updatedAt}` : 'Updated --'
-  const hasPlaceholder = !visibleWeather
-  const weatherStatusMessage = weather.status === 'error' ? weather.message : ''
-  const locationLabel =
-    weather.status === 'ready'
-      ? weather.location
-      : visibleWeather
-        ? visibleWeather.location
-      : weather.status === 'error'
-        ? 'Location unavailable'
-        : 'Locating...'
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(new Date())
-    }, 60 * 1000)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    const controller = new AbortController()
-
-    const loadWeather = async () => {
-      setWeather({
-        status: 'loading',
-        message: 'Locating and fetching weather...',
-      })
-      try {
-        const position = await getCurrentPosition()
-        if (cancelled) {
-          return
-        }
-        const latitude = position.coords.latitude
-        const longitude = position.coords.longitude
-
-        const forecastResponse = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
-          { signal: controller.signal },
-        )
-        if (!forecastResponse.ok) {
-          throw new Error('Weather service is unavailable.')
-        }
-        const forecastData = (await forecastResponse.json()) as OpenMeteoForecastResponse
-        const currentTemp = forecastData.current?.temperature_2m
-        if (typeof currentTemp !== 'number') {
-          throw new Error('Incomplete weather data.')
-        }
-        const weatherCode = forecastData.current?.weather_code ?? -1
-        const weatherView = weatherCodeToView(weatherCode)
-        const high = forecastData.daily?.temperature_2m_max?.[0]
-        const low = forecastData.daily?.temperature_2m_min?.[0]
-
-        const locationText = await resolveCityName(latitude, longitude, controller.signal)
-        if (cancelled) {
-          return
-        }
-        const nextWeather: WeatherReadyState = {
-          status: 'ready',
-          location: locationText,
-          temperature: Math.round(currentTemp),
-          high: typeof high === 'number' ? Math.round(high) : null,
-          low: typeof low === 'number' ? Math.round(low) : null,
-          condition: weatherView.condition,
-          icon: weatherView.icon,
-          weatherCode,
-          updatedAt: new Date().toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-          }),
-        }
-        setWeather(nextWeather)
-        setLastReadyWeather(nextWeather)
-      } catch (error) {
-        if (cancelled) {
-          return
-        }
-        setWeather({
-          status: 'error',
-          message: formatWeatherError(error),
-        })
-      }
-    }
-
-    void loadWeather()
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [weatherReloadToken])
-
-  return (
-    <div className="detail__panel detail__home" role="region" aria-label="Home">
-      <div className="home-grid">
-        <section className="home-card home-hero">
-          <div className="home-hero__tag">{greeting}</div>
-          <h2 className="home-hero__title">Hello Lee</h2>
-          <p className="home-hero__time">{timeText}</p>
-          <div className="home-hero__meta">
-            <span>{locationLabel}</span>
-          </div>
-        </section>
-
-        <section
-          className={`home-card home-weather ${weatherThemeClass}`}
-          aria-live="polite"
-        >
-          <div className="home-card__top">
-            <h3 className="home-card__title">Weather</h3>
-            <button
-              type="button"
-              className="home-action"
-              onClick={() => setWeatherReloadToken((value) => value + 1)}
-              disabled={weather.status === 'loading'}
-              aria-label="Refresh weather"
-              title="Refresh weather"
-            >
-              {weather.status === 'loading' ? 'Refreshing' : 'Refresh'}
-            </button>
-          </div>
-          <div className={`home-weather__main ${hasPlaceholder ? 'is-placeholder' : ''}`}>
-            <span className="home-weather__icon" aria-hidden="true">{iconLabel}</span>
-            <div>
-              <div className="home-weather__temp">{tempLabel}</div>
-              <div className="home-weather__condition">{conditionLabel}</div>
-            </div>
-          </div>
-          <div className="home-weather__meta">
-            <span>{cardLocationLabel}</span>
-            <span>{highLowLabel}</span>
-            <span>{updatedLabel}</span>
-          </div>
-          {weatherStatusMessage ? (
-            <p className={`home-weather__status ${weather.status === 'error' ? 'is-error' : ''}`}>
-              {weatherStatusMessage}
-            </p>
-          ) : null}
-        </section>
-      </div>
-    </div>
-  )
-}
-
-
 type PluginFrameProps = {
   plugin: PluginEntry
 }
