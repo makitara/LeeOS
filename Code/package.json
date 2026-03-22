@@ -13,6 +13,7 @@
     "build:icon": "node scripts/build-mac-icon.mjs",
     "check": "npm run lint -- --max-warnings=0 && npm run build",
     "pack:mac": "npm run build && ELECTRON_BUILDER_CACHE=.cache/electron-builder ELECTRON_CACHE=.cache/electron electron-builder --mac --dir",
+    "smoke:mac": "npm run pack:mac && open release/mac-arm64/LeeOS.app",
     "dist:mac": "npm run build && ELECTRON_BUILDER_CACHE=.cache/electron-builder ELECTRON_CACHE=.cache/electron electron-builder --mac",
     "lint": "eslint .",
     "preview": "vite preview"
