@@ -1,0 +1,185 @@
+;(() => {
+      const FILE_DATA = 'tracker-data.json'
+      const FILE_README = 'README.md'
+      const FILE_SUBS_LEGACY = 'subscriptions.json'
+      const FILE_CATS_LEGACY = 'categories.json'
+      const DND_CATEGORY = 'application/x-leeos-category'
+      const DND_SUB = 'application/x-leeos-sub'
+
+
+      const uid = (prefix = 'id') => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+      const todayIso = () => new Date().toISOString().slice(0, 10)
+      const normalizeIsoDate = (input, fallback = '') => {
+        const raw = String(input || '').trim()
+        if (!raw) return fallback
+
+        const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+        if (iso) {
+          const value = `${iso[1]}-${iso[2]}-${iso[3]}`
+          const parsed = new Date(`${value}T00:00:00`)
+          return Number.isNaN(parsed.getTime()) ? fallback : value
+        }
+
+        const slash = raw.match(/^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/)
+        if (slash) {
+          const month = String(Number(slash[2])).padStart(2, '0')
+          const day = String(Number(slash[3])).padStart(2, '0')
+          const value = `${slash[1]}-${month}-${day}`
+          const parsed = new Date(`${value}T00:00:00`)
+          return Number.isNaN(parsed.getTime()) ? fallback : value
+        }
+
+        const parsed = new Date(raw)
+        if (Number.isNaN(parsed.getTime())) return fallback
+        return parsed.toISOString().slice(0, 10)
+      }
+      const addDaysIso = (baseIso, days) => {
+        const d = new Date(baseIso)
+        d.setDate(d.getDate() + days)
+        return d.toISOString().slice(0, 10)
+      }
+      const esc = (v) => String(v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+      const normalizeUrl = (v) => {
+        const raw = String(v || '').trim()
+        if (!raw) return ''
+        return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+      }
+
+      const parseDomain = (urlLike) => {
+        try { return new URL(normalizeUrl(urlLike)).hostname.replace(/^www\./, '') } catch { return '' }
+      }
+
+      const normalizePrice = (value) => {
+        if (value === null || value === undefined) return null
+        const raw = String(value).trim()
+        if (!raw) return null
+        const parsed = Number(raw)
+        if (!Number.isFinite(parsed) || parsed < 0) return null
+        return parsed
+      }
+
+      const MAX_ICON_SIZE_BYTES = 2 * 1024 * 1024
+      const FAVICON_CACHE_TTL_MS = 30 * 1000
+      const ALLOWED_ICON_TYPES = new Set([
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif',
+        'image/x-icon',
+        'image/vnd.microsoft.icon',
+      ])
+      const faviconCache = new Map()
+      const isAllowedIconFile = (file) => {
+        const type = String(file?.type || '').toLowerCase()
+        if (type && ALLOWED_ICON_TYPES.has(type)) return true
+        return /\.(png|jpe?g|webp|gif|ico)$/i.test(String(file?.name || ''))
+      }
+      const sanitizeIconDataUrl = (value) => {
+        const raw = String(value || '').trim()
+        if (!raw) return ''
+        if (!raw.startsWith('data:image/')) return ''
+        if (raw.startsWith('data:image/svg+xml')) return ''
+        if (raw.length > 3_500_000) return ''
+        return raw
+      }
+      const getCachedFavicon = (domain) => {
+        const key = String(domain || '').trim().toLowerCase()
+        if (!key) return undefined
+        const cached = faviconCache.get(key)
+        if (!cached) return undefined
+        if (Date.now() > cached.expiresAt) {
+          faviconCache.delete(key)
+          return undefined
+        }
+        return cached.src
+      }
+      const setCachedFavicon = (domain, src) => {
+        const key = String(domain || '').trim().toLowerCase()
+        if (!key) return
+        faviconCache.set(key, {
+          src: typeof src === 'string' && src ? src : null,
+          expiresAt: Date.now() + FAVICON_CACHE_TTL_MS,
+        })
+      }
+      const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result || ''))
+        reader.onerror = () => reject(new Error('Failed to read icon file.'))
+        reader.readAsDataURL(file)
+      })
+
+      const DEFAULT_ICON_SVG = "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M12 5.2l1.9 3.9 3.9 1.9-3.9 1.9-1.9 3.9-1.9-3.9-3.9-1.9 3.9-1.9z'></path></svg>"
+      const defaultIconMarkup = () => `<span class="default-icon" aria-hidden="true">${DEFAULT_ICON_SVG}</span>`
+
+      const daysUntil = (iso) => {
+        const a = new Date(todayIso())
+        const b = new Date(iso)
+        if (Number.isNaN(b.getTime())) return Infinity
+        return Math.floor((b.getTime() - a.getTime()) / 86400000)
+      }
+
+      const cycleDays = (s) => {
+        if (s.billingCycle === 'yearly') return 365
+        if (s.billingCycle === 'custom_days') return Math.max(1, Math.floor(Number(s.customDays) || 30))
+        return 30
+      }
+
+      const progress = (s) => {
+        const normalizedDate = normalizeIsoDate(s.nextBillingDate, '')
+        if (!normalizedDate) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
+        const total = cycleDays(s)
+        const left = daysUntil(normalizedDate)
+        if (!Number.isFinite(left)) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
+        if (left <= 0) return { leftText: `${left}d`, pct: 100, scheduled: true, overdue: true }
+        const pct = Math.max(0, Math.min(100, Math.round(((total - left) / total) * 100)))
+        return { leftText: `${left}d`, pct, scheduled: true, overdue: false }
+      }
+
+      const resolveCardStatus = (s, p) => {
+        if (s.status === 'cancelled') return 'cancelled'
+        if (p.overdue) return 'expired'
+        return 'active'
+      }
+
+      const faviconSources = (domain) => [
+        `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+        `https://www.google.com/s2/favicons?sz=128&domain=${domain}`,
+        `https://${domain}/favicon.ico`,
+      ]
+
+  window.LeeOSSubscriptionTrackerShared = Object.freeze({
+    FILE_DATA,
+    FILE_README,
+    FILE_SUBS_LEGACY,
+    FILE_CATS_LEGACY,
+    DND_CATEGORY,
+    DND_SUB,
+    uid,
+    todayIso,
+    normalizeIsoDate,
+    addDaysIso,
+    esc,
+    normalizeUrl,
+    parseDomain,
+    normalizePrice,
+    MAX_ICON_SIZE_BYTES,
+    isAllowedIconFile,
+    sanitizeIconDataUrl,
+    getCachedFavicon,
+    setCachedFavicon,
+    fileToDataUrl,
+    DEFAULT_ICON_SVG,
+    defaultIconMarkup,
+    daysUntil,
+    cycleDays,
+    progress,
+    resolveCardStatus,
+    faviconSources,
+  })
+})()

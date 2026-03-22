@@ -1,0 +1,10 @@
+{
+  "id": "com.leeos.body-metrics",
+  "name": "Body Metrics",
+  "version": "1.0.0",
+  "description": "Manual body metrics tracker with anatomy categories, metric cards and simple trend charts.",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "order": 3,
+  "permissions": []
+}

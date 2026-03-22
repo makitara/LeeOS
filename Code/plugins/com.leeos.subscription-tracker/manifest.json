@@ -1,0 +1,10 @@
+{
+  "id": "com.leeos.subscription-tracker",
+  "name": "Subscription Tracker",
+  "version": "2.0.0",
+  "description": "Visual local-first subscription tracker with card board, renewal progress and favicon icons.",
+  "entry": "index.html",
+  "icon": "icon.svg",
+  "order": 2,
+  "permissions": []
+}

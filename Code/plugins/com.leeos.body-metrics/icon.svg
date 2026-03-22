@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Body Metrics Icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd6a5" />
+      <stop offset="100%" stop-color="#f8b4c8" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#bg)" />
+  <circle cx="64" cy="36" r="11" fill="#ffffff" fill-opacity="0.92" />
+  <path d="M64 51c-12 0-22 9.8-22 22v19c0 2.8 2.2 5 5 5h34c2.8 0 5-2.2 5-5V73c0-12.2-10-22-22-22z" fill="#ffffff" fill-opacity="0.92" />
+  <rect x="54" y="60" width="20" height="7" rx="3.5" fill="#f472b6" fill-opacity="0.95" />
+  <circle cx="56" cy="84" r="4" fill="#fb7185" />
+  <circle cx="72" cy="84" r="4" fill="#fb7185" />
+</svg>

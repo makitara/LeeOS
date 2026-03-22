@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Body Metrics</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="plugin-header">
+        <h1 class="plugin-title">Body Metrics</h1>
+        <button type="button" class="data-dir-btn" id="dataDirBtn" aria-label="打开插件数据文件夹" title="打开插件数据文件夹">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3.5 8.3a2 2 0 0 1 2-2h4.4l1.8 2h6.8a2 2 0 0 1 2 2v1.2H3.5V8.3z"></path>
+            <path d="M3.5 11.5h17l-1.3 6.2a2 2 0 0 1-2 1.6H6.1a2 2 0 0 1-2-2v-5.8z"></path>
+            <path d="M11 15l2.3-2.3"></path>
+            <path d="M13.3 12.7H11.4"></path>
+            <path d="M13.3 12.7V14.6"></path>
+          </svg>
+        </button>
+      </header>
+
+      <div class="workspace">
+      <aside class="left-panel">
+        <div class="category-stage">
+          <div class="category-list" id="categoryList"></div>
+        </div>
+      </aside>
+
+      <section class="right-panel">
+        <div class="topbar">
+          <h1 class="title" id="categoryTitle">全身</h1>
+        </div>
+
+        <div class="notice" id="notice"></div>
+
+        <div class="cards" id="cards"></div>
+      </section>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head">
+          <h2 class="modal-title" id="modalTitle">指标详情</h2>
+          <button type="button" class="close-btn" id="closeModal" aria-label="关闭">×</button>
+        </div>
+
+        <div class="range-editor" id="rangeEditor"></div>
+
+        <div class="chart-wrap">
+          <svg id="chart" class="chart" viewBox="0 0 860 320" preserveAspectRatio="none"></svg>
+          <div class="chart-tip" id="chartTip"></div>
+          <div class="chart-empty" id="chartEmpty"></div>
+        </div>
+
+        <form class="entry-form" id="entryForm" novalidate>
+          <label class="field field-date">
+            <input id="entryDate" class="input" type="date" required />
+          </label>
+
+          <label class="field" id="entryValueField">
+            <span class="field-label">数值</span>
+            <input id="entryValue" class="input" type="text" required />
+          </label>
+
+          <div class="entry-submit-actions">
+            <button type="button" id="pullLastBtn" class="ghost-btn" aria-label="Pull latest" title="Pull latest">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4v10"></path>
+                <path d="M8.5 10.8L12 14.2l3.5-3.4"></path>
+                <path d="M5 18.2h14"></path>
+              </svg>
+            </button>
+            <button type="button" id="saveEntryBtn" class="btn" aria-label="Add" title="Add">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="form-error" id="formError"></div>
+        </form>
+
+        <div class="entries" id="entries"></div>
+      </div>
+    </div>
+    <script src="./constants.js"></script>
+    <script src="./storage.js"></script>
+    <script src="./events.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
