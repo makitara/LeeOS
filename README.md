@@ -1,6 +1,6 @@
 # LeeOS
 
-LeeOS 是一个 macOS-only 的“插件控制台”（Plugin Console）：Host 提供壳与受控 API，所有业务功能以插件形式运行在 sandboxed iframe 中。
+LeeOS 是一个 macOS-only 的“插件控制台”（Plugin Console）：Host 提供壳、首页与受控 API，核心业务功能以插件形式运行在 sandboxed iframe 中。
 
 ## 快速开始
 

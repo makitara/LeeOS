@@ -25,7 +25,8 @@
 - **Plugin**：被 Host 加载的功能模块（在 iframe 内运行的静态网页）
 
 原则：
-- Host 不写业务逻辑；业务都进 `Code/plugins/**`
+- Host 负责壳层体验、插件加载与平台能力；需要独立演进的业务模块进入 `Code/plugins/**`
+- Home 首页等壳层信息卡片可以留在 Host，但不要侵入插件边界与数据边界
 - Plugin 不能直接调用 Node/Electron；只能通过 Host 提供的 API
 
 ## 插件如何被加载（简化流程）
@@ -43,4 +44,3 @@
 - `{userData}/plugin-data/<plugin-id>/`
 
 插件只能通过 `LeeOS.fs.*` 访问自己的数据目录，Host 会阻止路径穿越（避免插件读写到别的地方）。
-

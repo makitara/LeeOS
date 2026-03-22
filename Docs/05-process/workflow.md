@@ -11,7 +11,7 @@
 ## 标准节奏（每个任务都按这个来）
 1) **对齐（必须）**
 - 先回答：要解决什么问题？成功的验收标准是什么？
-- 明确：范围/不做什么/风险点/是否允许删改（你已偏激进）
+- 明确：范围/不做什么/风险点/是否允许删改
 
 2) **拆分（协调型 Agent 负责）**
 - 把需求拆成 1~N 个子任务：哪些属于 Host，哪些属于插件
@@ -26,7 +26,7 @@
 - 将实现窗口的“交付摘要” + `git diff`（或文件列表）粘贴进去
 - Review Master 输出报告与行动项（不直接改代码）
 
-插件任务附加门禁（新增，必须）：
+插件任务附加门禁（必须）：
 - 若本次改动涉及插件内的关键交互（新增按钮、删除/清空/覆盖、弹窗确认），实现 Agent 必须在交付摘要中附带“关键交互自测结果”：
 1. 交互入口可见且可触发
 2. 状态变化正确（如 `Delete -> Confirm`）
@@ -35,7 +35,7 @@
 - 对破坏性操作的执行态，必须禁用冲突按钮（避免重复提交、并发冲突或误触）。
 - 禁止将 `window.alert/confirm/prompt` 作为破坏性操作的唯一确认机制。
 
-关键录入交互补充门禁（2026-02-21，新增）：
+关键录入交互补充门禁：
 - 新增按钮若同时绑定 `submit + click`，两条链路必须汇聚到同一个业务函数并有重复提交保护。
 - 错误提示位置必须与字段一致：日期错误显示在日期/表单层，数值错误显示在数值输入层。
 - 数据加载必须做字段清洗：至少校验 `date` 与 `value` 的类型/取值合法性，禁止静默吞入脏数据。
@@ -73,11 +73,6 @@
 - 文档：`docs/<scope>`
 - 审查任务（可选）：`review/<scope>`
 
-示例：
-- `feat/diary-ui-create-open`
-- `feat/diary-migrate-headers`
-- `docs/workflow-branching`
-
 ### 3) Agent 开工前标准动作（必须）
 1. `git fetch --all`
 2. `git checkout main`
@@ -86,17 +81,11 @@
 
 ### 4) 提交流程与粒度
 - 小步提交：每个提交只做一类改动（交互、迁移、文案清理分开）。
-- 提交信息建议：
-  - `feat(diary-heatmap): add create-entry button and open-on-click`
-  - `feat(diary-heatmap): add migration from Documents/diary with header patch`
-  - `chore(diary-heatmap): remove empty-state legacy hint`
+- 提交信息建议：`<type>(<scope>): <summary>`
 
 ### 5) 合并顺序（并行任务）
 - 先合并“低耦合、低风险”分支，再合并“高耦合”分支。
-- 本项目当前建议顺序：
-1. `feat/diary-ui-create-open`
-2. `feat/diary-migrate-headers`
-3. 统一 `leeos-code-review-master` 审查后再进基线
+- 涉及 Host 安全文件或共享协议时，统一审查后再进基线。
 
 ### 6) 冲突处理
 - 后合并分支必须先 `rebase` 到最新基线再提合并。

@@ -12,6 +12,7 @@ dist
 dist-ssr
 release
 .dev-runtime
+.cache
 build/icon.icns
 build/icon.iconset
 *.local

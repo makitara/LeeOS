@@ -32,6 +32,15 @@
 2. 关键按钮链路检查：显示 -> 点击 -> 状态变化 -> 数据落盘 -> 视图刷新
 3. 失败路径检查：至少覆盖一次“写盘失败/非法输入/能力不可用”
 
+## 打包与发布
+- 本地检查：`npm -C Code run check`
+- 本地打包目录版：`npm -C Code run pack:mac`
+- 本地打包发布版：`npm -C Code run dist:mac`
+
+说明：
+- GitHub 已接入发布流程：推送形如 `v0.1.0` 的 tag 后，GitHub Actions 会自动构建 macOS `dmg`/`zip` 并挂到 Release。
+- 当前为未签名构建；后续如接入 Apple 开发者证书，再补签名与 notarization。
+
 ### 写盘失败注入（手测模板）
 在插件 DevTools 控制台临时注入：
 ```js
