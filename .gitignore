@@ -1,0 +1,24 @@
+# Node
+node_modules/
+dist/
+dist-electron/
+.DS_Store
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Plugin data backups
+plugin-data-backup*/
+Code/plugin-data-backup*/
