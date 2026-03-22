@@ -68,6 +68,8 @@
           if (!data || typeof data !== 'object') return null
           if (!Array.isArray(data.subscriptions) || !Array.isArray(data.categories)) return null
           return {
+            schemaVersion: Number.isFinite(Number(data.schemaVersion)) ? Number(data.schemaVersion) : 0,
+            updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
             subscriptions: data.subscriptions,
             categories: data.categories,
           }

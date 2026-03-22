@@ -1363,6 +1363,21 @@
           })
       }
 
+      const needsStoreMigration = (dataStore) => {
+        if (!dataStore || typeof dataStore !== 'object') return false
+        if (Number(dataStore.schemaVersion) < 3) return true
+        return state.subscriptions.some((subscription) => {
+          if (!subscription || typeof subscription !== 'object') return false
+          return (
+            'billingCycle' in subscription
+            || 'customDays' in subscription
+            || 'nextBillingDate' in subscription
+            || !('startDate' in subscription)
+            || !('endDate' in subscription)
+          )
+        })
+      }
+
       const createTrackerEventsApi = window.createLeeOSSubscriptionTrackerEventsAPI
       if (!createTrackerEventsApi) {
         throw new Error('Subscription Tracker events module is not loaded')
@@ -1419,6 +1434,7 @@
         if (dataStore.status === 'ok' && dataStore.data) {
           state.subscriptions = dataStore.data.subscriptions
           state.categories = dataStore.data.categories
+          shouldPersistAfterNormalize = needsStoreMigration(dataStore.data)
         } else if (dataStore.status === 'missing') {
           const [legacySubs, legacyCats] = await Promise.all([
             readLegacyJsonArray(FILE_SUBS_LEGACY),
@@ -1473,7 +1489,9 @@
             throw err
           }
           await writeStorageReadme()
-          await cleanupLegacyStorageFiles()
+          if (dataStore.status === 'missing') {
+            await cleanupLegacyStorageFiles()
+          }
         }
 
         bindEvents()
