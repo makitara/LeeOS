@@ -1,18 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PluginEntry } from './env'
 import HomePanel from './home/HomePanel'
 import DetailPanel from './plugin-host/DetailPanel'
-import { LEEOS_METHOD, type LeeOSMethod } from './shared/capabilities'
+import usePluginBridge from './plugin-host/usePluginBridge'
 import SidebarItem, { type SidebarNavItem } from './shell/SidebarItem'
 import './App.css'
 
-type PluginFrameInfo = {
-  iframe: HTMLIFrameElement
-  pluginId: string
-  origin: string
-}
-
-const DEFAULT_REQUEST_TIMEOUT_MS = 3_000
 const HOME_PLUGIN_ID = 'leeos:home'
 const HOME_SIDEBAR_ITEM = {
   id: HOME_PLUGIN_ID,
@@ -20,23 +13,11 @@ const HOME_SIDEBAR_ITEM = {
   icon: '◎',
 } as const
 
-const REQUEST_TIMEOUT_MS: Partial<Record<LeeOSMethod, number>> = {
-  [LEEOS_METHOD.pluginsList]: DEFAULT_REQUEST_TIMEOUT_MS,
-  [LEEOS_METHOD.fsReadText]: DEFAULT_REQUEST_TIMEOUT_MS,
-  [LEEOS_METHOD.fsReadJson]: DEFAULT_REQUEST_TIMEOUT_MS,
-  [LEEOS_METHOD.fsReadDir]: DEFAULT_REQUEST_TIMEOUT_MS,
-  [LEEOS_METHOD.fsOpenDir]: 5_000,
-  [LEEOS_METHOD.fsOpenFile]: 5_000,
-  [LEEOS_METHOD.fsWriteText]: 8_000,
-  [LEEOS_METHOD.fsWriteJson]: 8_000,
-  [LEEOS_METHOD.fsDelete]: 8_000,
-}
-
 function App() {
   const [plugins, setPlugins] = useState<PluginEntry[]>([])
   const [activePluginId, setActivePluginId] = useState(HOME_PLUGIN_ID)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const frameLookupCache = useRef(new WeakMap<object, PluginFrameInfo>())
+  usePluginBridge()
   const currentPluginId = activePluginId === HOME_PLUGIN_ID || plugins.some((plugin) => plugin.id === activePluginId)
     ? activePluginId
     : HOME_PLUGIN_ID
@@ -61,244 +42,9 @@ function App() {
     }
   }, [])
 
-  const findPluginFrameBySource = (source: MessageEventSource | null): PluginFrameInfo | null => {
-    if (!source || typeof source !== 'object') {
-      return null
-    }
-    const cached = frameLookupCache.current.get(source)
-    if (cached) {
-      if (cached.iframe.isConnected && cached.iframe.contentWindow === source) {
-        const pluginId = cached.iframe.dataset.pluginId ?? ''
-        const origin = cached.iframe.dataset.pluginOrigin ?? ''
-        if (pluginId && origin && pluginId === cached.pluginId && origin === cached.origin) {
-          return cached
-        }
-      }
-      frameLookupCache.current.delete(source)
-    }
-    const frames = Array.from(
-      document.querySelectorAll<HTMLIFrameElement>('iframe[data-plugin-id][data-plugin-origin]'),
-    )
-    for (const iframe of frames) {
-      if (iframe.contentWindow === source) {
-        const pluginId = iframe.dataset.pluginId ?? ''
-        const origin = iframe.dataset.pluginOrigin ?? ''
-        if (pluginId && origin) {
-          const frameInfo = { iframe, pluginId, origin }
-          frameLookupCache.current.set(source, frameInfo)
-          return frameInfo
-        }
-        return null
-      }
-    }
-    return null
-  }
-
-  const postPluginMessage = (frame: PluginFrameInfo, message: Record<string, unknown>) => {
-    frame.iframe.contentWindow?.postMessage(message, frame.origin)
-  }
-
-  const isAllowedPluginOrigin = (origin: string) => origin.startsWith('leeos-plugin://')
-
-  const handlePluginRequest = async (payload: {
-    pluginId: string
-    requestId: string
-    method?: string
-    params?: unknown
-  }) => {
-    const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
-      let timeoutId: ReturnType<typeof setTimeout> | null = null
-      const timeout = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
-      })
-      try {
-        return await Promise.race([
-          promise.finally(() => {
-            if (timeoutId) {
-              clearTimeout(timeoutId)
-            }
-          }),
-          timeout,
-        ])
-      } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId)
-        }
-      }
-    }
-    const paramsRecord = (value: unknown): Record<string, unknown> | null => {
-      if (!value || typeof value !== 'object') {
-        return null
-      }
-      return value as Record<string, unknown>
-    }
-    const params = paramsRecord(payload.params) ?? {}
-    const requestTimeoutMs = payload.method
-      ? REQUEST_TIMEOUT_MS[payload.method as LeeOSMethod] ?? DEFAULT_REQUEST_TIMEOUT_MS
-      : DEFAULT_REQUEST_TIMEOUT_MS
-    switch (payload.method) {
-      case LEEOS_METHOD.pluginsList:
-        return withTimeout(window.LeeOS.plugins.list().then((data) => ({ ok: true, data })), requestTimeoutMs)
-      case LEEOS_METHOD.fsReadText: {
-        const filePath = typeof params.path === 'string' ? params.path : ''
-        if (!filePath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs.readText(payload.pluginId, filePath).then((data) => ({ ok: true, data })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsWriteText: {
-        const filePath = typeof params.path === 'string' ? params.path : ''
-        const content = typeof params.content === 'string' ? params.content : ''
-        if (!filePath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs
-            .writeText(payload.pluginId, filePath, content)
-            .then(() => ({ ok: true, data: null })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsReadJson: {
-        const filePath = typeof params.path === 'string' ? params.path : ''
-        if (!filePath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs.readJson(payload.pluginId, filePath).then((data) => ({ ok: true, data })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsWriteJson: {
-        const filePath = typeof params.path === 'string' ? params.path : ''
-        if (!filePath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs
-            .writeJson(payload.pluginId, filePath, params.value)
-            .then(() => ({ ok: true, data: null })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsReadDir: {
-        const directoryPath = typeof params.path === 'string' ? params.path : '.'
-        return withTimeout(
-          window.LeeOS.fs.readDir(payload.pluginId, directoryPath).then((data) => ({ ok: true, data })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsDelete: {
-        const targetPath = typeof params.path === 'string' ? params.path : ''
-        if (!targetPath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs.delete(payload.pluginId, targetPath).then(() => ({ ok: true, data: null })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsOpenDir: {
-        const directoryPath = typeof params.path === 'string' ? params.path : '.'
-        return withTimeout(
-          window.LeeOS.fs.openDir(payload.pluginId, directoryPath).then((data) => ({ ok: true, data })),
-          requestTimeoutMs,
-        )
-      }
-      case LEEOS_METHOD.fsOpenFile: {
-        const filePath = typeof params.path === 'string' ? params.path : ''
-        if (!filePath) {
-          return { ok: false, error: 'Invalid params', code: 'ERR_REQUEST_FAILED' }
-        }
-        return withTimeout(
-          window.LeeOS.fs.openFile(payload.pluginId, filePath).then((data) => ({ ok: true, data })),
-          requestTimeoutMs,
-        )
-      }
-      default:
-        return {
-          ok: false,
-          error: 'Unsupported method',
-          code: 'ERR_UNSUPPORTED_METHOD',
-        }
-    }
-  }
-
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (!event.data || typeof event.data !== 'object') {
-        return
-      }
-      const payload = event.data as {
-        type?: string
-        pluginId?: string
-        requestId?: string
-        method?: string
-        params?: unknown
-      }
-      const frame = findPluginFrameBySource(event.source)
-      if (!frame) {
-        return
-      }
-      // 只要消息来源是当前 iframe，且 origin 属于 leeos-plugin://，允许 origin 为空/null 的浏览器实现
-      const isSameSource = event.source === frame.iframe.contentWindow
-      const isExpectedOrigin = event.origin === frame.origin || event.origin === 'null'
-      if (!frame.origin || !isAllowedPluginOrigin(frame.origin) || !isSameSource || !isExpectedOrigin) {
-        return
-      }
-      if (payload.type === 'LeeOS:ping') {
-        if (payload.pluginId && payload.pluginId !== frame.pluginId) {
-          return
-        }
-        postPluginMessage(frame, {
-          type: 'LeeOS:pong',
-          version: window.LeeOS?.version ?? '0.0.0',
-        })
-        return
-      }
-      if (payload.type === 'LeeOS:request' && typeof payload.requestId === 'string') {
-        if (payload.pluginId && payload.pluginId !== frame.pluginId) {
-          return
-        }
-        const requestId = payload.requestId.trim()
-        if (!requestId) {
-          return
-        }
-        void handlePluginRequest({
-          pluginId: frame.pluginId,
-          requestId,
-          method: payload.method,
-          params: payload.params,
-        })
-          .then((result) => {
-            postPluginMessage(frame, {
-              type: 'LeeOS:response',
-              requestId,
-              ...result,
-            })
-          })
-          .catch((error: unknown) => {
-            const message = error instanceof Error ? error.message : 'Request failed'
-            const code = message === 'Request timed out' ? 'ERR_REQUEST_TIMEOUT' : 'ERR_REQUEST_FAILED'
-            postPluginMessage(frame, {
-              type: 'LeeOS:response',
-              requestId,
-              ok: false,
-              error: message,
-              code,
-            })
-          })
-      }
-    }
-    window.addEventListener('message', handler)
-    return () => window.removeEventListener('message', handler)
-  }, [])
-
   return (
     <main className="app-shell">
+      <div className="shell-titlebar" aria-hidden="true" />
       <div className={`shell-layout ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
         <aside className={`sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
           <div className="sidebar__header">

@@ -340,11 +340,24 @@ const configureApplicationMenu = () => {
       accelerator: 'CmdOrCtrl+Q',
       click: () => app.quit(),
     })
+    const editSubmenu: MenuItemConstructorOptions[] = [
+      { role: 'undo' },
+      { role: 'redo' },
+      { type: 'separator' },
+      { role: 'cut' },
+      { role: 'copy' },
+      { role: 'paste' },
+      { role: 'selectAll' },
+    ]
 
     const template: MenuItemConstructorOptions[] = [
       {
         label: APP_DISPLAY_NAME,
         submenu: appSubmenu,
+      },
+      {
+        label: 'Edit',
+        submenu: editSubmenu,
       },
     ]
     const menu = Menu.buildFromTemplate(template)
@@ -523,6 +536,13 @@ const pluginSdkScript = (pluginId: string) => {
         return Promise.resolve(${JSON.stringify(LEEOS_FS_CAPABILITIES)});
       }
     };
+    window.LeeOS.system = {
+      openExternal: function(url) {
+        return window.LeeOS._request(${JSON.stringify(LEEOS_METHOD.systemOpenExternal)}, { url: url })
+          .then(function(value) { return Boolean(value); })
+          .catch(function() { return false; });
+      }
+    };
   `
 }
 
@@ -691,6 +711,26 @@ app.whenReady().then(async () => {
       if (isDev) {
         const message = error instanceof Error ? error.message : String(error ?? 'unknown error')
         console.warn(`[LeeOS] openFile failed: ${message}`)
+      }
+      return false
+    }
+  })
+  ipcMain.handle('leeos.system.openExternal', async (_event, payload: { url: string }) => {
+    try {
+      const rawUrl = typeof payload.url === 'string' ? payload.url.trim() : ''
+      if (!rawUrl) {
+        return false
+      }
+      const parsed = new URL(rawUrl)
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return false
+      }
+      await shell.openExternal(parsed.toString())
+      return true
+    } catch (error) {
+      if (isDev) {
+        const message = error instanceof Error ? error.message : String(error ?? 'unknown error')
+        console.warn(`[LeeOS] openExternal failed: ${message}`)
       }
       return false
     }

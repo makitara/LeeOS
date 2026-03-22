@@ -63,6 +63,10 @@
     "mac": {
       "icon": "public/icon.png",
       "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSLocationUsageDescription": "LeeOS uses your location to show local weather on Home.",
+        "NSLocationWhenInUseUsageDescription": "LeeOS uses your location to show local weather on Home."
+      },
       "target": [
         "dmg",
         "zip"

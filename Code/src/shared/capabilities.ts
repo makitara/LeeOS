@@ -8,6 +8,7 @@ export const LEEOS_METHOD = {
   fsDelete: 'LeeOS.fs.delete',
   fsOpenDir: 'LeeOS.fs.openDir',
   fsOpenFile: 'LeeOS.fs.openFile',
+  systemOpenExternal: 'LeeOS.system.openExternal',
 } as const
 
 export type LeeOSMethod = (typeof LEEOS_METHOD)[keyof typeof LEEOS_METHOD]

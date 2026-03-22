@@ -32,4 +32,7 @@ contextBridge.exposeInMainWorld('LeeOS', {
     openFile: (pluginId: string, filePath: string) =>
       ipcRenderer.invoke('leeos.fs.openFile', { pluginId, path: filePath }),
   },
+  system: {
+    openExternal: (url: string) => ipcRenderer.invoke('leeos.system.openExternal', { url }),
+  },
 })

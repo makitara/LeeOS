@@ -22,6 +22,9 @@ declare global {
         openDir: (pluginId: string, directoryPath?: string) => Promise<boolean>
         openFile: (pluginId: string, filePath: string) => Promise<boolean>
       }
+      system: {
+        openExternal: (url: string) => Promise<boolean>
+      }
     }
   }
 }

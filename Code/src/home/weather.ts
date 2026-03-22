@@ -10,10 +10,16 @@ export type WeatherReadyState = {
   updatedAt: string
 }
 
+export type CachedWeatherReadyState = WeatherReadyState & {
+  fetchedAt: number
+}
+
 export type WeatherState =
   | { status: 'loading'; message: string }
   | WeatherReadyState
   | { status: 'error'; message: string }
+
+export type GeolocationPermissionState = PermissionState | 'unsupported'
 
 type OpenMeteoReverseResponse = {
   results?: Array<{
@@ -55,6 +61,15 @@ type WeatherRule = {
 
 const GEOLOCATION_TIMEOUT_MS = 8_000
 const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000
+const WEATHER_REFRESH_INTERVAL_MS = 20 * 60 * 1000
+const WEATHER_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000
+const WEATHER_CACHE_KEY = 'leeos:home-weather-cache:v1'
+const WEATHER_PERMISSION_ONBOARDING_KEY = 'leeos:home-weather-permission-onboarding-seen'
+const WEATHER_UPDATED_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
 
 const WEATHER_RULES: WeatherRule[] = [
   { matches: (code) => code === 0, condition: 'Clear', icon: '☀️', theme: 'clear' },
@@ -87,6 +102,8 @@ const FALLBACK_WEATHER_RULE = {
   icon: '🌡️',
   theme: 'neutral',
 } as const
+
+let weatherCache: CachedWeatherReadyState | null = null
 
 const getCurrentPosition = () =>
   new Promise<GeolocationPosition>((resolve, reject) => {
@@ -170,6 +187,104 @@ export const formatWeatherError = (error: unknown) => {
     return error.message
   }
   return 'Failed to load weather. Please try again.'
+}
+
+const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+
+const isValidCachedWeather = (value: unknown): value is CachedWeatherReadyState => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<CachedWeatherReadyState>
+  return (
+    candidate.status === 'ready'
+    && typeof candidate.location === 'string'
+    && typeof candidate.temperature === 'number'
+    && (typeof candidate.high === 'number' || candidate.high === null)
+    && (typeof candidate.low === 'number' || candidate.low === null)
+    && typeof candidate.condition === 'string'
+    && typeof candidate.icon === 'string'
+    && typeof candidate.weatherCode === 'number'
+    && typeof candidate.updatedAt === 'string'
+    && typeof candidate.fetchedAt === 'number'
+  )
+}
+
+const persistWeatherCache = (value: CachedWeatherReadyState) => {
+  weatherCache = value
+  if (!canUseStorage()) {
+    return
+  }
+  try {
+    window.localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify(value))
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+export const readCachedWeather = () => {
+  if (weatherCache) {
+    return weatherCache
+  }
+  if (!canUseStorage()) {
+    return null
+  }
+  try {
+    const raw = window.localStorage.getItem(WEATHER_CACHE_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as unknown
+    if (!isValidCachedWeather(parsed)) {
+      return null
+    }
+    weatherCache = parsed
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export const shouldRefreshCachedWeather = (cached: CachedWeatherReadyState | null, now = Date.now()) => {
+  if (!cached) {
+    return true
+  }
+  return now - cached.fetchedAt >= WEATHER_REFRESH_INTERVAL_MS
+}
+
+export const hasWeatherPermissionOnboardingBeenSeen = () => {
+  if (!canUseStorage()) {
+    return false
+  }
+  try {
+    return window.localStorage.getItem(WEATHER_PERMISSION_ONBOARDING_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export const markWeatherPermissionOnboardingSeen = () => {
+  if (!canUseStorage()) {
+    return
+  }
+  try {
+    window.localStorage.setItem(WEATHER_PERMISSION_ONBOARDING_KEY, 'true')
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+export const getGeolocationPermissionState = async (): Promise<GeolocationPermissionState> => {
+  const permissionsApi = navigator.permissions
+  if (!permissionsApi?.query) {
+    return 'unsupported'
+  }
+  try {
+    const status = await permissionsApi.query({ name: 'geolocation' })
+    return status.state
+  } catch {
+    return 'unsupported'
+  }
 }
 
 export const weatherCodeToView = (code: number) => {
@@ -278,15 +393,85 @@ export const resolveCityName = async (latitude: number, longitude: number, signa
 export const getGreetingText = (now: Date) => {
   const hour = now.getHours()
   if (hour < 6) {
-    return '夜深了'
+    return 'Late night'
   }
   if (hour < 12) {
-    return '早上好'
+    return 'Good morning'
   }
   if (hour < 18) {
-    return '下午好'
+    return 'Good afternoon'
   }
-  return '晚上好'
+  return 'Good evening'
+}
+
+export const loadWeather = async (signal: AbortSignal): Promise<WeatherReadyState> => {
+  const position = await getCurrentPosition()
+  const latitude = position.coords.latitude
+  const longitude = position.coords.longitude
+
+  const forecastResponse = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
+    { signal },
+  )
+  if (!forecastResponse.ok) {
+    throw new Error('Weather service is unavailable.')
+  }
+  const forecastData = (await forecastResponse.json()) as {
+    current?: {
+      temperature_2m?: number
+      weather_code?: number
+    }
+    daily?: {
+      temperature_2m_max?: number[]
+      temperature_2m_min?: number[]
+    }
+  }
+  const currentTemp = forecastData.current?.temperature_2m
+  if (typeof currentTemp !== 'number') {
+    throw new Error('Incomplete weather data.')
+  }
+
+  const weatherCode = forecastData.current?.weather_code ?? -1
+  const weatherView = weatherCodeToView(weatherCode)
+  const high = forecastData.daily?.temperature_2m_max?.[0]
+  const low = forecastData.daily?.temperature_2m_min?.[0]
+  const location = await resolveCityName(latitude, longitude, signal)
+
+  const nextWeather: WeatherReadyState = {
+    status: 'ready',
+    location,
+    temperature: Math.round(currentTemp),
+    high: typeof high === 'number' ? Math.round(high) : null,
+    low: typeof low === 'number' ? Math.round(low) : null,
+    condition: weatherView.condition,
+    icon: weatherView.icon,
+    weatherCode,
+    updatedAt: WEATHER_UPDATED_FORMATTER.format(new Date()),
+  }
+
+  persistWeatherCache({
+    ...nextWeather,
+    fetchedAt: Date.now(),
+  })
+
+  return nextWeather
+}
+
+export const getInitialWeatherState = (): WeatherState => {
+  const cached = readCachedWeather()
+  if (!cached) {
+    return {
+      status: 'loading',
+      message: 'Loading weather...',
+    }
+  }
+  if (Date.now() - cached.fetchedAt > WEATHER_CACHE_MAX_AGE_MS) {
+    return {
+      status: 'loading',
+      message: 'Refreshing weather...',
+    }
+  }
+  return cached
 }
 
 export { getCurrentPosition }

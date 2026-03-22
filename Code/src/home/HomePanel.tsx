@@ -1,27 +1,22 @@
 import { useEffect, useState } from 'react'
 import {
   formatWeatherError,
-  getCurrentPosition,
+  getGeolocationPermissionState,
   getGreetingText,
-  resolveCityName,
+  getInitialWeatherState,
+  hasWeatherPermissionOnboardingBeenSeen,
+  loadWeather as loadWeatherData,
+  markWeatherPermissionOnboardingSeen,
+  readCachedWeather,
+  shouldRefreshCachedWeather,
   weatherCodeToTheme,
-  weatherCodeToView,
+  type GeolocationPermissionState,
   type WeatherReadyState,
   type WeatherState,
 } from './weather'
 
-type OpenMeteoForecastResponse = {
-  current?: {
-    temperature_2m?: number
-    weather_code?: number
-  }
-  daily?: {
-    temperature_2m_max?: number[]
-    temperature_2m_min?: number[]
-  }
-}
-
 const CLOCK_REFRESH_INTERVAL_MS = 60 * 1000
+const WEATHER_AUTO_REFRESH_INTERVAL_MS = 20 * 60 * 1000
 
 const HOME_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
@@ -32,19 +27,12 @@ const HOME_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   hour12: false,
 })
 
-const WEATHER_UPDATED_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-})
-
 function HomePanel() {
   const [now, setNow] = useState(() => new Date())
-  const [weather, setWeather] = useState<WeatherState>({
-    status: 'loading',
-    message: 'Loading weather...',
-  })
-  const [lastReadyWeather, setLastReadyWeather] = useState<WeatherReadyState | null>(null)
+  const [weather, setWeather] = useState<WeatherState>(() => getInitialWeatherState())
+  const [lastReadyWeather, setLastReadyWeather] = useState<WeatherReadyState | null>(() => readCachedWeather())
+  const [permissionState, setPermissionState] = useState<GeolocationPermissionState>('prompt')
+  const [showPermissionPrompt, setShowPermissionPrompt] = useState(false)
   const [weatherReloadToken, setWeatherReloadToken] = useState(0)
   const greeting = getGreetingText(now)
   const timeText = HOME_TIME_FORMATTER.format(now)
@@ -73,6 +61,25 @@ function HomePanel() {
           : 'Locating...'
 
   useEffect(() => {
+    let cancelled = false
+
+    const bootstrapWeatherPermission = async () => {
+      const nextPermissionState = await getGeolocationPermissionState()
+      if (cancelled) {
+        return
+      }
+      setPermissionState(nextPermissionState)
+      const hasSeenOnboarding = hasWeatherPermissionOnboardingBeenSeen()
+      setShowPermissionPrompt(!hasSeenOnboarding && nextPermissionState !== 'granted')
+    }
+
+    void bootstrapWeatherPermission()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       setNow(new Date())
     }, CLOCK_REFRESH_INTERVAL_MS)
@@ -80,56 +87,49 @@ function HomePanel() {
   }, [])
 
   useEffect(() => {
+    if (showPermissionPrompt) {
+      return undefined
+    }
+    if (!['granted', 'unsupported'].includes(permissionState)) {
+      return undefined
+    }
+    const timer = window.setInterval(() => {
+      setWeatherReloadToken((value) => value + 1)
+    }, WEATHER_AUTO_REFRESH_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [permissionState, showPermissionPrompt])
+
+  useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
 
-    const loadWeather = async () => {
+    const refreshWeather = async () => {
+      const cachedWeather = readCachedWeather()
+      const isForcedReload = weatherReloadToken > 0
+      if (cachedWeather) {
+        setLastReadyWeather(cachedWeather)
+      }
+      if (!isForcedReload && !shouldRefreshCachedWeather(cachedWeather)) {
+        if (cachedWeather) {
+          setWeather(cachedWeather)
+        }
+        return
+      }
       setWeather({
         status: 'loading',
-        message: 'Locating and fetching weather...',
+        message: cachedWeather ? 'Refreshing weather...' : 'Locating and fetching weather...',
       })
       try {
-        const position = await getCurrentPosition()
+        const nextWeather = await loadWeatherData(controller.signal)
         if (cancelled) {
           return
-        }
-        const latitude = position.coords.latitude
-        const longitude = position.coords.longitude
-
-        const forecastResponse = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`,
-          { signal: controller.signal },
-        )
-        if (!forecastResponse.ok) {
-          throw new Error('Weather service is unavailable.')
-        }
-        const forecastData = (await forecastResponse.json()) as OpenMeteoForecastResponse
-        const currentTemp = forecastData.current?.temperature_2m
-        if (typeof currentTemp !== 'number') {
-          throw new Error('Incomplete weather data.')
-        }
-        const weatherCode = forecastData.current?.weather_code ?? -1
-        const weatherView = weatherCodeToView(weatherCode)
-        const high = forecastData.daily?.temperature_2m_max?.[0]
-        const low = forecastData.daily?.temperature_2m_min?.[0]
-
-        const locationText = await resolveCityName(latitude, longitude, controller.signal)
-        if (cancelled) {
-          return
-        }
-        const nextWeather: WeatherReadyState = {
-          status: 'ready',
-          location: locationText,
-          temperature: Math.round(currentTemp),
-          high: typeof high === 'number' ? Math.round(high) : null,
-          low: typeof low === 'number' ? Math.round(low) : null,
-          condition: weatherView.condition,
-          icon: weatherView.icon,
-          weatherCode,
-          updatedAt: WEATHER_UPDATED_FORMATTER.format(new Date()),
         }
         setWeather(nextWeather)
         setLastReadyWeather(nextWeather)
+        const nextPermissionState = await getGeolocationPermissionState()
+        if (!cancelled) {
+          setPermissionState(nextPermissionState)
+        }
       } catch (error) {
         if (cancelled) {
           return
@@ -138,15 +138,37 @@ function HomePanel() {
           status: 'error',
           message: formatWeatherError(error),
         })
+        const nextPermissionState = await getGeolocationPermissionState()
+        if (!cancelled) {
+          setPermissionState(nextPermissionState)
+        }
       }
     }
 
-    void loadWeather()
+    if (weatherReloadToken === 0 && (showPermissionPrompt || !['granted', 'unsupported'].includes(permissionState))) {
+      return () => {
+        cancelled = true
+        controller.abort()
+      }
+    }
+
+    void refreshWeather()
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [weatherReloadToken])
+  }, [permissionState, showPermissionPrompt, weatherReloadToken])
+
+  const handleEnableLocation = () => {
+    markWeatherPermissionOnboardingSeen()
+    setShowPermissionPrompt(false)
+    setWeatherReloadToken((value) => value + 1)
+  }
+
+  const handleDismissPermissionPrompt = () => {
+    markWeatherPermissionOnboardingSeen()
+    setShowPermissionPrompt(false)
+  }
 
   return (
     <div className="detail__panel detail__home" role="region" aria-label="Home">
@@ -193,6 +215,22 @@ function HomePanel() {
             <p className={`home-weather__status ${weather.status === 'error' ? 'is-error' : ''}`}>
               {weatherStatusMessage}
             </p>
+          ) : null}
+          {showPermissionPrompt ? (
+            <div className="home-weather__overlay" role="dialog" aria-labelledby="home-weather-permission-title" aria-modal="false">
+              <div className="home-weather__overlay-card">
+                <h4 id="home-weather-permission-title">Enable local weather</h4>
+                <p>Allow location access once so Home can show your local weather after the app is installed.</p>
+                <div className="home-weather__overlay-actions">
+                  <button type="button" className="home-action" onClick={handleEnableLocation}>
+                    Allow location
+                  </button>
+                  <button type="button" className="home-action home-action--ghost" onClick={handleDismissPermissionPrompt}>
+                    Not now
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
         </section>
       </div>
