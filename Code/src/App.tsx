@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PluginEntry } from './env'
 import HomePanel from './home/HomePanel'
+import DetailPanel from './plugin-host/DetailPanel'
 import { LEEOS_METHOD, type LeeOSMethod } from './shared/capabilities'
+import SidebarItem, { type SidebarNavItem } from './shell/SidebarItem'
 import './App.css'
 
 type PluginFrameInfo = {
@@ -30,21 +32,6 @@ const REQUEST_TIMEOUT_MS: Partial<Record<LeeOSMethod, number>> = {
   [LEEOS_METHOD.fsDelete]: 8_000,
 }
 
-const resolvePluginFrameOrigin = (entryUrl?: string) => {
-  if (!entryUrl) return ''
-  try {
-    const parsed = new URL(entryUrl)
-    // Chromium may expose custom protocol origins as "null" in URL.origin.
-    // For postMessage targeting and verification we derive a stable origin from protocol+host.
-    if (parsed.protocol === 'leeos-plugin:') {
-      return `${parsed.protocol}//${parsed.host}`
-    }
-    return parsed.origin
-  } catch {
-    return ''
-  }
-}
-
 function App() {
   const [plugins, setPlugins] = useState<PluginEntry[]>([])
   const [activePluginId, setActivePluginId] = useState(HOME_PLUGIN_ID)
@@ -53,7 +40,7 @@ function App() {
   const currentPluginId = activePluginId === HOME_PLUGIN_ID || plugins.some((plugin) => plugin.id === activePluginId)
     ? activePluginId
     : HOME_PLUGIN_ID
-  const sidebarItems = [HOME_SIDEBAR_ITEM, ...plugins]
+  const sidebarItems: SidebarNavItem[] = [HOME_SIDEBAR_ITEM, ...plugins]
 
   useEffect(() => {
     let isMounted = true
@@ -348,94 +335,6 @@ function App() {
         </section>
       </div>
     </main>
-  )
-}
-
-type DetailPanelProps = {
-  plugin?: PluginEntry
-}
-
-function DetailPanel({ plugin }: DetailPanelProps) {
-  if (!plugin) {
-    return (
-      <div className="detail__empty">
-        <div className="detail__title">Plugin not found</div>
-        <div className="detail__subtitle">Select a different plugin.</div>
-      </div>
-    )
-  }
-
-  if (plugin.entryUrl) {
-    return (
-      <div className="detail__plugin-host" role="region" aria-label={plugin.name}>
-        <PluginFrame plugin={plugin} />
-      </div>
-    )
-  }
-
-  return (
-    <div className="detail__panel" role="region" aria-label={plugin.name}>
-      <div className="detail__header">
-        <div className="detail__heading">
-          {plugin.iconUrl ? (
-            <img className="detail__icon" src={plugin.iconUrl} alt="" />
-          ) : null}
-          <span>{plugin.name}</span>
-        </div>
-        {plugin.description ? (
-          <div className="detail__description">{plugin.description}</div>
-        ) : null}
-      </div>
-      <div className="plugin-frame plugin-frame--missing">
-        <div className="plugin-frame__placeholder">Missing plugin entry</div>
-      </div>
-    </div>
-  )
-}
-
-type SidebarItemProps = {
-  item: { id: string; name: string; icon?: string; iconUrl?: string }
-  isActive: boolean
-  onSelect: () => void
-}
-
-function SidebarItem({ item, isActive, onSelect }: SidebarItemProps) {
-  return (
-    <button type="button" className={`sidebar__item ${isActive ? 'is-active' : ''}`} onClick={onSelect}>
-      <span className="sidebar__icon" aria-hidden="true">
-        {item.iconUrl ? <img src={item.iconUrl} alt="" /> : item.icon ?? '⬡'}
-      </span>
-      <span className="sidebar__label">{item.name}</span>
-    </button>
-  )
-}
-type PluginFrameProps = {
-  plugin: PluginEntry
-}
-
-function PluginFrame({ plugin }: PluginFrameProps) {
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-  const origin = resolvePluginFrameOrigin(plugin.entryUrl)
-
-  return (
-    <div className="plugin-frame" role="presentation">
-      {status === 'loading' ? (
-        <div className="plugin-frame__placeholder">Loading…</div>
-      ) : null}
-      {status === 'error' ? (
-        <div className="plugin-frame__placeholder">Plugin failed to load</div>
-      ) : null}
-      <iframe
-        className="plugin-frame__inner"
-        src={plugin.entryUrl}
-        sandbox="allow-scripts allow-same-origin"
-        title={plugin.name}
-        data-plugin-id={plugin.id}
-        data-plugin-origin={origin}
-        onLoad={() => setStatus('ready')}
-        onError={() => setStatus('error')}
-      />
-    </div>
   )
 }
 
