@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promises as fs } from 'node:fs'
 import { LEEOS_FS_CAPABILITIES, LEEOS_METHOD } from '../src/shared/capabilities'
+import { checkForUpdatesManually, initAutoUpdater } from './auto-updater'
 
 const isDev = !app.isPackaged
 const APP_DISPLAY_NAME = 'LeeOS'
@@ -177,6 +178,7 @@ const resolvePluginEntry = async (
 }
 
 let mainWindow: BrowserWindow | null = null
+let triggerManualUpdateCheck: (() => void) | null = null
 
 ipcMain.on('leeos.app.getVersion', (event) => {
   event.returnValue = app.getVersion()
@@ -236,6 +238,14 @@ const configureApplicationMenu = () => {
         accelerator: 'CmdOrCtrl+R',
         click: () => {
           mainWindow?.webContents.reload()
+        },
+      })
+      appSubmenu.push({ type: 'separator' })
+    } else {
+      appSubmenu.push({
+        label: 'Check for Updates...',
+        click: () => {
+          void triggerManualUpdateCheck?.()
         },
       })
       appSubmenu.push({ type: 'separator' })
@@ -464,6 +474,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(async () => {
+  triggerManualUpdateCheck = () => checkForUpdatesManually({ getWindow: () => mainWindow })
   configureApplicationMenu()
   await listPlugins()
   protocol.handle('leeos-plugin', async (request) => {
@@ -640,6 +651,7 @@ app.whenReady().then(async () => {
     }
   })
   createMainWindow()
+  initAutoUpdater({ getWindow: () => mainWindow })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

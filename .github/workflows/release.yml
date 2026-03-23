@@ -48,6 +48,8 @@ jobs:
           path: |
             Code/release/*.dmg
             Code/release/*.zip
+            Code/release/latest*.yml
+            Code/release/*.blockmap
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
@@ -57,3 +59,5 @@ jobs:
           files: |
             Code/release/*.dmg
             Code/release/*.zip
+            Code/release/latest*.yml
+            Code/release/*.blockmap
