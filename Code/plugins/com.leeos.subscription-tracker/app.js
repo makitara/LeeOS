@@ -81,6 +81,9 @@
         editor: $('editor'),
         editorForm: $('editorForm'),
         editorTitle: $('editorTitle'),
+        editorUtilityActions: $('editorUtilityActions'),
+        editorOpenUrlBtn: $('editorOpenUrlBtn'),
+        editorRenewBtn: $('editorRenewBtn'),
         editorError: $('editorError'),
         editorSaveBtn: $('editorSaveBtn'),
         deleteSubBtn: $('deleteSubBtn'),
@@ -366,6 +369,24 @@
         if (dom.renewalEditor.open) {
           dom.renewalEditor.close()
         }
+      }
+
+      const syncEditorUtilityActions = (subscription) => {
+        const wrap = dom.editorUtilityActions
+        const openBtn = dom.editorOpenUrlBtn
+        const renewBtn = dom.editorRenewBtn
+        if (!(wrap instanceof HTMLElement) || !(openBtn instanceof HTMLButtonElement) || !(renewBtn instanceof HTMLButtonElement)) {
+          return
+        }
+        if (!subscription?.id) {
+          wrap.hidden = true
+          openBtn.hidden = true
+          renewBtn.hidden = true
+          return
+        }
+        wrap.hidden = false
+        openBtn.hidden = !subscription.url
+        renewBtn.hidden = false
       }
 
       const openRenewalEditor = (subscription) => {
@@ -1143,6 +1164,13 @@
         const lastRenewalMeta = lastRenewal ? lastRenewal.paidAt : 'No renewals'
         const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate}` : 'Not scheduled'
         const leftLabel = !p.scheduled ? '-' : cardStatus === 'expired' ? 'Expired' : p.leftText
+        const progressSummaryLabel = !p.scheduled
+          ? 'No schedule'
+          : cardStatus === 'cancelled'
+            ? 'Cancelled'
+            : cardStatus === 'expired'
+              ? 'Renew now'
+              : `${p.pct}% used`
         const progressTone = cardStatus === 'cancelled'
           ? 'progress-cancelled'
           : (!p.scheduled || cardStatus === 'expired' ? 'progress-expired' : 'progress-active')
@@ -1157,10 +1185,6 @@
                 ? `<img src="${esc(cachedFavicon)}" data-cached-favicon="true" data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`
                 : `<img data-srcs='${esc(JSON.stringify(faviconSources(domain, s.url)))}' data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`))
             : defaultIconMarkup())
-        const renewButtonMarkup = '<button type="button" class="card-link-btn card-renew-btn" data-renew="true" title="Record renewal" aria-label="Record renewal">Renew</button>'
-        const openUrlButtonMarkup = s.url
-          ? `<button type="button" class="card-link-btn" data-open-url="true" title="Open subscription URL" aria-label="Open subscription URL">Open</button>`
-          : ''
         const card = document.createElement('article')
         card.className = 'card'
         card.draggable = true
@@ -1173,7 +1197,6 @@
               <p class="name">${esc(s.name)}</p>
               <div class="card-submeta"><span class="category-badge">${esc(categoryLabel)}</span></div>
             </div>
-            <div class="card-actions">${openUrlButtonMarkup}${renewButtonMarkup}</div>
             <span class="chip ${esc(cardStatus)}">${esc(cardStatus)}</span>
           </div>
 
@@ -1202,17 +1225,22 @@
               </div>
             </div>
           </div>
-          <div class="card-meta card-secondary">
-            <div class="meta-pill ${startDate && endDate ? '' : 'is-empty'}" title="Billing window">
-              <span class="meta-icon">${CARD_ICON.billingWindow}</span>
-              <span class="meta-text">${esc(dateRangeLabel)}</span>
+          <div class="timeline-panel card-secondary ${esc(progressTone)}">
+            <div class="timeline-headline">
+              <div class="timeline-figure ${p.scheduled ? '' : 'is-empty'}">
+                <span class="timeline-figure__icon">${CARD_ICON.daysLeft}</span>
+                <div class="timeline-figure__copy">
+                  <b>${esc(leftLabel)}</b>
+                  <small>${esc(progressSummaryLabel)}</small>
+                </div>
+              </div>
+              <div class="timeline-window ${startDate && endDate ? '' : 'is-empty'}">
+                <span class="timeline-window__icon">${CARD_ICON.billingWindow}</span>
+                <span class="timeline-window__text">${esc(dateRangeLabel)}</span>
+              </div>
             </div>
-            <div class="meta-pill ${p.scheduled ? '' : 'is-empty'}" title="Days left">
-              <span class="meta-icon">${CARD_ICON.daysLeft}</span>
-              <span class="meta-text">${esc(leftLabel)}</span>
-            </div>
+            <div class="progress progress-hero ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
           </div>
-          <div class="progress card-secondary ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
         `
 
         const customImg = card.querySelector('img[data-custom-icon="true"]')
@@ -1259,22 +1287,6 @@
           }, { once: true })
           img.addEventListener('error', next)
           next()
-        }
-
-        const openUrlButton = card.querySelector('[data-open-url="true"]')
-        if (openUrlButton instanceof HTMLButtonElement) {
-          openUrlButton.addEventListener('click', (e) => {
-            e.stopPropagation()
-            void openSubscriptionUrl(s.url)
-          })
-        }
-
-        const renewButton = card.querySelector('[data-renew="true"]')
-        if (renewButton instanceof HTMLButtonElement) {
-          renewButton.addEventListener('click', (e) => {
-            e.stopPropagation()
-            openRenewalEditor(s)
-          })
         }
 
         card.addEventListener('click', (e) => {
@@ -1432,6 +1444,7 @@
         state.editingId = null
         state.editorIconDataUrl = ''
         dom.editorTitle.textContent = 'New Subscription'
+        syncEditorUtilityActions(null)
         setFormError(dom.editorError, '')
         clearEditorInlineErrors()
         setButtonPending(dom.editorSaveBtn, 'Saving...', false)
@@ -1458,6 +1471,7 @@
           if (s) {
             state.editingId = s.id
             dom.editorTitle.textContent = 'Edit Subscription'
+            syncEditorUtilityActions(s)
             resetDeleteButtonState()
             dom.deleteSubBtn.hidden = false
             dom.fName.value = s.name || ''
@@ -1528,6 +1542,17 @@
         dom.renewalEditorForm.addEventListener('submit', async (e) => {
           e.preventDefault()
           await submitRenewalSave()
+        })
+        dom.editorOpenUrlBtn.addEventListener('click', async () => {
+          const subscription = state.subscriptions.find((item) => item.id === state.editingId)
+          if (!subscription) return
+          await openSubscriptionUrl(subscription.url)
+        })
+        dom.editorRenewBtn.addEventListener('click', async () => {
+          const subscription = state.subscriptions.find((item) => item.id === state.editingId)
+          if (!subscription) return
+          await closeEditorWithCardReturn(subscription.id)
+          openRenewalEditor(subscription)
         })
       }
 
