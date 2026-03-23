@@ -595,49 +595,6 @@
   color: #ef6b78;
 }
 
-.home-weather__overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-  padding: 14px;
-  background: rgba(7, 10, 16, 0.3);
-  backdrop-filter: blur(8px);
-}
-
-.home-weather__overlay-card {
-  margin-top: auto;
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
-  padding: 14px;
-  background: rgba(11, 17, 27, 0.82);
-  box-shadow: 0 12px 28px rgba(4, 8, 16, 0.24);
-}
-
-.home-weather__overlay-card h4 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.home-weather__overlay-card p {
-  margin: 8px 0 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.home-weather__overlay-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.home-action--ghost {
-  background: rgba(148, 163, 184, 0.08);
-}
-
 @media (max-width: 1100px) {
   .home-hero,
   .home-weather {

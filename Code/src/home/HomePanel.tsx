@@ -4,9 +4,7 @@ import {
   getGeolocationPermissionState,
   getGreetingText,
   getInitialWeatherState,
-  hasWeatherPermissionOnboardingBeenSeen,
   loadWeather as loadWeatherData,
-  markWeatherPermissionOnboardingSeen,
   readCachedWeather,
   shouldRefreshCachedWeather,
   weatherCodeToTheme,
@@ -31,8 +29,7 @@ function HomePanel() {
   const [now, setNow] = useState(() => new Date())
   const [weather, setWeather] = useState<WeatherState>(() => getInitialWeatherState())
   const [lastReadyWeather, setLastReadyWeather] = useState<WeatherReadyState | null>(() => readCachedWeather())
-  const [permissionState, setPermissionState] = useState<GeolocationPermissionState>('prompt')
-  const [showPermissionPrompt, setShowPermissionPrompt] = useState(false)
+  const [permissionState, setPermissionState] = useState<GeolocationPermissionState | 'checking'>('checking')
   const [weatherReloadToken, setWeatherReloadToken] = useState(0)
   const greeting = getGreetingText(now)
   const timeText = HOME_TIME_FORMATTER.format(now)
@@ -69,8 +66,6 @@ function HomePanel() {
         return
       }
       setPermissionState(nextPermissionState)
-      const hasSeenOnboarding = hasWeatherPermissionOnboardingBeenSeen()
-      setShowPermissionPrompt(!hasSeenOnboarding && nextPermissionState !== 'granted')
     }
 
     void bootstrapWeatherPermission()
@@ -87,9 +82,6 @@ function HomePanel() {
   }, [])
 
   useEffect(() => {
-    if (showPermissionPrompt) {
-      return undefined
-    }
     if (!['granted', 'unsupported'].includes(permissionState)) {
       return undefined
     }
@@ -97,7 +89,7 @@ function HomePanel() {
       setWeatherReloadToken((value) => value + 1)
     }, WEATHER_AUTO_REFRESH_INTERVAL_MS)
     return () => window.clearInterval(timer)
-  }, [permissionState, showPermissionPrompt])
+  }, [permissionState])
 
   useEffect(() => {
     let cancelled = false
@@ -145,7 +137,7 @@ function HomePanel() {
       }
     }
 
-    if (weatherReloadToken === 0 && (showPermissionPrompt || !['granted', 'unsupported'].includes(permissionState))) {
+    if (permissionState === 'checking' || permissionState === 'denied') {
       return () => {
         cancelled = true
         controller.abort()
@@ -157,18 +149,7 @@ function HomePanel() {
       cancelled = true
       controller.abort()
     }
-  }, [permissionState, showPermissionPrompt, weatherReloadToken])
-
-  const handleEnableLocation = () => {
-    markWeatherPermissionOnboardingSeen()
-    setShowPermissionPrompt(false)
-    setWeatherReloadToken((value) => value + 1)
-  }
-
-  const handleDismissPermissionPrompt = () => {
-    markWeatherPermissionOnboardingSeen()
-    setShowPermissionPrompt(false)
-  }
+  }, [permissionState, weatherReloadToken])
 
   return (
     <div className="detail__panel detail__home" role="region" aria-label="Home">
@@ -215,22 +196,6 @@ function HomePanel() {
             <p className={`home-weather__status ${weather.status === 'error' ? 'is-error' : ''}`}>
               {weatherStatusMessage}
             </p>
-          ) : null}
-          {showPermissionPrompt ? (
-            <div className="home-weather__overlay" role="dialog" aria-labelledby="home-weather-permission-title" aria-modal="false">
-              <div className="home-weather__overlay-card">
-                <h4 id="home-weather-permission-title">Enable local weather</h4>
-                <p>Allow location access once so Home can show your local weather after the app is installed.</p>
-                <div className="home-weather__overlay-actions">
-                  <button type="button" className="home-action" onClick={handleEnableLocation}>
-                    Allow location
-                  </button>
-                  <button type="button" className="home-action home-action--ghost" onClick={handleDismissPermissionPrompt}>
-                    Not now
-                  </button>
-                </div>
-              </div>
-            </div>
           ) : null}
         </section>
       </div>

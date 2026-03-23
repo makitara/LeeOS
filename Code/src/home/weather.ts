@@ -64,7 +64,6 @@ const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000
 const WEATHER_REFRESH_INTERVAL_MS = 20 * 60 * 1000
 const WEATHER_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000
 const WEATHER_CACHE_KEY = 'leeos:home-weather-cache:v1'
-const WEATHER_PERMISSION_ONBOARDING_KEY = 'leeos:home-weather-permission-onboarding-seen'
 const WEATHER_UPDATED_FORMATTER = new Intl.DateTimeFormat('en-US', {
   hour: '2-digit',
   minute: '2-digit',
@@ -250,28 +249,6 @@ export const shouldRefreshCachedWeather = (cached: CachedWeatherReadyState | nul
     return true
   }
   return now - cached.fetchedAt >= WEATHER_REFRESH_INTERVAL_MS
-}
-
-export const hasWeatherPermissionOnboardingBeenSeen = () => {
-  if (!canUseStorage()) {
-    return false
-  }
-  try {
-    return window.localStorage.getItem(WEATHER_PERMISSION_ONBOARDING_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
-
-export const markWeatherPermissionOnboardingSeen = () => {
-  if (!canUseStorage()) {
-    return
-  }
-  try {
-    window.localStorage.setItem(WEATHER_PERMISSION_ONBOARDING_KEY, 'true')
-  } catch {
-    // Ignore storage write failures.
-  }
 }
 
 export const getGeolocationPermissionState = async (): Promise<GeolocationPermissionState> => {
