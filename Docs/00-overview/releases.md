@@ -7,7 +7,7 @@
   - Sidebar + Detail Shell
   - `leeos-plugin://` 协议加载、iframe sandbox、Host ↔ Plugin `postMessage` 通道
   - `LeeOS.fs.*`、`openDir()`、`openFile()` 与 plugin-data 路径/符号链接防护
-  - Home 首页信息卡片与地理位置/天气链路
+  - Home 首页信息卡片
 - Plugins：
   - `com.leeos.diary-heatmap` v1
   - `com.leeos.subscription-tracker` v2

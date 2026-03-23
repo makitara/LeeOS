@@ -16,7 +16,6 @@ jobs:
       ELECTRON_BUILDER_CACHE: .cache/electron-builder
       ELECTRON_CACHE: .cache/electron
       GH_TOKEN: ${{ github.token }}
-      VITE_GOOGLE_API_KEY: ${{ secrets.VITE_GOOGLE_API_KEY }}
 
     steps:
       - name: Checkout

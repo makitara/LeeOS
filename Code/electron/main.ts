@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -7,115 +7,12 @@ import { LEEOS_FS_CAPABILITIES, LEEOS_METHOD } from '../src/shared/capabilities'
 
 const isDev = !app.isPackaged
 const APP_DISPLAY_NAME = 'LeeOS'
-const GEOLOCATION_API_KEY = (
-  process.env.LEEOS_GOOGLE_API_KEY?.trim()
-  || process.env.GOOGLE_API_KEY?.trim()
-  || import.meta.env.VITE_GOOGLE_API_KEY?.trim()
-  || ''
-)
 app.setName(APP_DISPLAY_NAME)
-if (GEOLOCATION_API_KEY) {
-  process.env.GOOGLE_API_KEY = GEOLOCATION_API_KEY
-} else if (isDev) {
-  console.warn('[LeeOS] GOOGLE_API_KEY is not configured. Home weather geolocation will be unavailable.')
-}
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = isDev
   ? path.join(app.getAppPath(), 'plugins')
   : path.join(process.resourcesPath, 'plugins')
 const PLUGIN_DATA_DIR = path.join(app.getPath('userData'), 'plugin-data')
-
-const getDevServerOrigin = () => {
-  const raw = process.env.VITE_DEV_SERVER_URL?.trim() || 'http://localhost:5173/'
-  try {
-    return new URL(raw).origin
-  } catch {
-    return 'http://localhost:5173'
-  }
-}
-
-const isHostRendererUrl = (url: string) => {
-  if (!url) {
-    return false
-  }
-  if (isDev) {
-    return url.startsWith(getDevServerOrigin())
-  }
-  return url.startsWith('file://')
-}
-
-const isHostRequestOrigin = (origin: string) => {
-  if (!origin || origin === 'null') {
-    return false
-  }
-  if (origin.startsWith('leeos-plugin://')) {
-    return false
-  }
-  if (origin.startsWith('file://')) {
-    return true
-  }
-  if (isDev) {
-    return origin === getDevServerOrigin() || origin === 'http://127.0.0.1:5173'
-  }
-  return false
-}
-
-const isAllowedGeolocationRequest = (context: {
-  requestingOrigin: string
-  requestingUrl?: string
-  embeddingUrl: string
-}) => {
-  if (!isHostRendererUrl(context.embeddingUrl)) {
-    return false
-  }
-  if (isHostRequestOrigin(context.requestingOrigin)) {
-    return true
-  }
-  if (
-    (!context.requestingOrigin || context.requestingOrigin === 'null')
-    && context.requestingUrl
-    && isHostRendererUrl(context.requestingUrl)
-  ) {
-    return true
-  }
-  return false
-}
-
-const configurePermissionHandlers = () => {
-  const ses = session.defaultSession
-  ses.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-    if (permission !== 'geolocation') {
-      return false
-    }
-    return isAllowedGeolocationRequest({
-      requestingOrigin,
-      requestingUrl: details.requestingUrl,
-      embeddingUrl: webContents?.getURL() ?? details.embeddingOrigin ?? '',
-    })
-  })
-  ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    if (permission !== 'geolocation') {
-      callback(false)
-      return
-    }
-    const requestDetails = details as {
-      requestingOrigin?: string
-      requestingUrl?: string
-      isMainFrame?: boolean
-    }
-    const allow = isAllowedGeolocationRequest({
-      requestingOrigin: requestDetails.requestingOrigin ?? '',
-      requestingUrl: requestDetails.requestingUrl,
-      embeddingUrl: webContents.getURL(),
-    })
-    if (isDev && !allow) {
-      console.warn(
-        `[LeeOS] geolocation denied. origin=${requestDetails.requestingOrigin || '(empty)'} url=${webContents.getURL()}`,
-      )
-    }
-    callback(allow)
-  })
-}
 
 type PluginManifest = {
   id: string
@@ -567,7 +464,6 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(async () => {
-  configurePermissionHandlers()
   configureApplicationMenu()
   await listPlugins()
   protocol.handle('leeos-plugin', async (request) => {
@@ -743,7 +639,6 @@ app.whenReady().then(async () => {
       return false
     }
   })
-  ipcMain.handle('leeos.system.isGeolocationConfigured', () => Boolean(GEOLOCATION_API_KEY))
   createMainWindow()
 
   app.on('activate', () => {

@@ -34,6 +34,5 @@ contextBridge.exposeInMainWorld('LeeOS', {
   },
   system: {
     openExternal: (url: string) => ipcRenderer.invoke('leeos.system.openExternal', { url }),
-    isGeolocationConfigured: () => ipcRenderer.invoke('leeos.system.isGeolocationConfigured'),
   },
 })
