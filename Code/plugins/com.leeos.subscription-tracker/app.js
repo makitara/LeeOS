@@ -1160,13 +1160,13 @@
         const priceLabel = formatMoneyLabel(priceValue, s.currency)
         const totalSpentLabel = renewalSummary.hasHistory
           ? formatMoneyLabel(renewalSummary.totalSpent, lastRenewal?.currency || s.currency)
-          : 'Not tracked'
-        const lastRenewalLabel = lastRenewal ? formatMoneyLabel(lastRenewal.amount, lastRenewal.currency) : 'Not tracked'
-        const lastRenewalMeta = lastRenewal ? lastRenewal.paidAt : 'No renewals'
-        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate}` : 'Not scheduled'
+          : ''
+        const lastRenewalLabel = lastRenewal ? formatMoneyLabel(lastRenewal.amount, lastRenewal.currency) : ''
+        const lastRenewalMeta = lastRenewal ? `${lastRenewalLabel} · ${lastRenewal.paidAt}` : 'No renewals yet'
+        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate}` : 'Dates not set'
         const leftLabel = !p.scheduled ? '-' : cardStatus === 'expired' ? 'Expired' : p.leftText
         const progressSummaryLabel = !p.scheduled
-          ? 'No schedule'
+          ? 'Dates not set'
           : cardStatus === 'cancelled'
             ? 'Cancelled'
             : cardStatus === 'expired'
@@ -1201,30 +1201,27 @@
             <span class="chip ${esc(cardStatus)}">${esc(cardStatus)}</span>
           </div>
 
-          <div class="card-metrics card-secondary">
+          <div class="card-metrics card-secondary ${renewalSummary.hasHistory ? '' : 'card-metrics--single'}">
             <div class="stat-pill" title="Renewal price">
               <span class="stat-icon">${CARD_ICON.renewalPrice}</span>
               <div class="stat-copy">
                 <b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b>
-                <small>Default</small>
+                <small>Renewal</small>
               </div>
             </div>
-            <div class="stat-pill" title="Total spent">
-              <span class="stat-icon">${CARD_ICON.totalSpent}</span>
-              <div class="stat-copy">
-                <b class="${renewalSummary.hasHistory ? '' : 'is-empty'}">${esc(totalSpentLabel)}</b>
-                <small>Total</small>
+            ${renewalSummary.hasHistory ? `
+              <div class="stat-pill" title="Total spent">
+                <span class="stat-icon">${CARD_ICON.totalSpent}</span>
+                <div class="stat-copy">
+                  <b>${esc(totalSpentLabel)}</b>
+                  <small>Total spent</small>
+                </div>
               </div>
-            </div>
+            ` : ''}
           </div>
-          <div class="card-meta card-secondary">
-            <div class="meta-pill" title="Last paid">
-              <span class="meta-icon">${CARD_ICON.lastPaid}</span>
-              <div class="meta-copy">
-                <b class="${lastRenewal ? '' : 'is-empty'}">${esc(lastRenewalLabel)}</b>
-                <small>${esc(lastRenewalMeta)}</small>
-              </div>
-            </div>
+          <div class="card-meta card-secondary ${renewalSummary.hasHistory ? '' : 'is-empty'}" title="Last renewal">
+            <span class="meta-icon">${CARD_ICON.lastPaid}</span>
+            <span class="meta-text ${lastRenewal ? '' : 'is-empty'}">${esc(lastRenewalMeta)}</span>
           </div>
           <div class="timeline-panel card-secondary ${esc(progressTone)}">
             <div class="timeline-headline">
@@ -1232,15 +1229,16 @@
                 <span class="timeline-figure__icon">${CARD_ICON.daysLeft}</span>
                 <div class="timeline-figure__copy">
                   <b>${esc(leftLabel)}</b>
-                  <small>${esc(progressSummaryLabel)}</small>
+                  <small>Days left</small>
                 </div>
               </div>
-              <div class="timeline-window ${startDate && endDate ? '' : 'is-empty'}">
-                <span class="timeline-window__icon">${CARD_ICON.billingWindow}</span>
-                <span class="timeline-window__text">${esc(dateRangeLabel)}</span>
-              </div>
+              <span class="timeline-status ${esc(progressTone)}">${esc(progressSummaryLabel)}</span>
             </div>
             <div class="progress progress-hero ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
+            <div class="timeline-window ${startDate && endDate ? '' : 'is-empty'}">
+              <span class="timeline-window__icon">${CARD_ICON.billingWindow}</span>
+              <span class="timeline-window__text">${esc(dateRangeLabel)}</span>
+            </div>
           </div>
         `
 
