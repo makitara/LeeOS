@@ -1228,6 +1228,7 @@
 
       .renewal-row__action {
         height: 28px;
+        min-width: 68px;
         border: 1px solid var(--line);
         border-radius: 8px;
         padding: 0 9px;
@@ -1241,6 +1242,10 @@
       .renewal-row__action:hover {
         border-color: color-mix(in srgb, var(--line) 68%, var(--text) 32%);
         color: color-mix(in srgb, var(--text) 90%, var(--muted));
+      }
+
+      .renewal-row__action--quiet {
+        color: var(--muted);
       }
 
       .renewal-row__action--danger {

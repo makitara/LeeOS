@@ -529,7 +529,12 @@
               </div>
               <div class="renewal-row__actions">
                 <button type="button" class="renewal-row__action" data-renewal-action="edit" data-renewal-id="${esc(entry.id)}">Edit</button>
-                <button type="button" class="renewal-row__action renewal-row__action--danger ${deleteArmed ? 'is-armed' : ''}" data-renewal-action="delete" data-renewal-id="${esc(entry.id)}">${deleteArmed ? 'Confirm' : 'Delete'}</button>
+                ${deleteArmed
+                  ? `
+                    <button type="button" class="renewal-row__action renewal-row__action--quiet" data-renewal-action="cancel-delete" data-renewal-id="${esc(entry.id)}">Cancel</button>
+                    <button type="button" class="renewal-row__action renewal-row__action--danger is-armed" data-renewal-action="confirm-delete" data-renewal-id="${esc(entry.id)}">Confirm</button>
+                  `
+                  : `<button type="button" class="renewal-row__action renewal-row__action--danger" data-renewal-action="delete" data-renewal-id="${esc(entry.id)}">Delete</button>`}
               </div>
             </article>
           `
@@ -547,14 +552,27 @@
 
         list.querySelectorAll('[data-renewal-action="delete"]').forEach((node) => {
           if (!(node instanceof HTMLButtonElement)) return
+          node.addEventListener('click', () => {
+            const renewalId = String(node.dataset.renewalId || '')
+            if (!renewalId) return
+            state.pendingRenewalDeleteId = renewalId
+            renderEditorRenewalHistory(subscription.id)
+          })
+        })
+
+        list.querySelectorAll('[data-renewal-action="cancel-delete"]').forEach((node) => {
+          if (!(node instanceof HTMLButtonElement)) return
+          node.addEventListener('click', () => {
+            state.pendingRenewalDeleteId = null
+            renderEditorRenewalHistory(subscription.id)
+          })
+        })
+
+        list.querySelectorAll('[data-renewal-action="confirm-delete"]').forEach((node) => {
+          if (!(node instanceof HTMLButtonElement)) return
           node.addEventListener('click', async () => {
             const renewalId = String(node.dataset.renewalId || '')
             if (!renewalId) return
-            if (state.pendingRenewalDeleteId !== renewalId) {
-              state.pendingRenewalDeleteId = renewalId
-              renderEditorRenewalHistory(subscription.id)
-              return
-            }
             state.pendingRenewalDeleteId = null
             setFormError(dom.editorError, '')
             try {
