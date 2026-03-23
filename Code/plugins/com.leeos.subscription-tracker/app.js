@@ -112,6 +112,7 @@
         fRenewalEndDate: $('fRenewalEndDate'),
       }
       let globalNoticeTimer = 0
+      let boardResizeTimer = 0
 
       const formatMoneyLabel = (amount, currency) => {
         const value = normalizePrice(amount)
@@ -1434,6 +1435,26 @@
         state.boardHasBootAnimated = true
       }
 
+      const bindBoardResizeObserver = () => {
+        if (dom.board.dataset.boundResize === 'true' || typeof ResizeObserver !== 'function') return
+        dom.board.dataset.boundResize = 'true'
+        let lastWidth = Math.round(dom.board.getBoundingClientRect().width)
+        const observer = new ResizeObserver((entries) => {
+          const width = Math.round(entries[0]?.contentRect?.width || 0)
+          if (!width || width === lastWidth) return
+          lastWidth = width
+          window.clearTimeout(boardResizeTimer)
+          dom.board.dataset.resizing = 'true'
+          boardResizeTimer = window.setTimeout(() => {
+            dom.board.dataset.resizing = 'false'
+            if (!state.dragSubId) {
+              renderBoard()
+            }
+          }, 140)
+        })
+        observer.observe(dom.board)
+      }
+
       const renderAll = () => {
         renderCategorySelect()
         renderCategories()
@@ -1719,6 +1740,7 @@
 
         bindEvents()
         bindRenewalEvents()
+        bindBoardResizeObserver()
         resetEditor()
         renderAll()
       }
