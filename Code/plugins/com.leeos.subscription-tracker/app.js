@@ -116,6 +116,14 @@
         return `${normalizeCurrency(currency)} ${value.toFixed(2)}`
       }
 
+      const CARD_ICON = Object.freeze({
+        renewalPrice: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 7.5h16'></path><path d='M6.5 12h11'></path><path d='M7 16.5h4'></path><rect x='3' y='5' width='18' height='14' rx='3'></rect></svg>",
+        totalSpent: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M7 7h10'></path><path d='M7 12h10'></path><path d='M7 17h10'></path><rect x='4' y='4' width='16' height='4' rx='2'></rect><rect x='4' y='9' width='16' height='4' rx='2'></rect><rect x='4' y='14' width='16' height='4' rx='2'></rect></svg>",
+        lastPaid: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M7 4h10l3 3v13H4V4z'></path><path d='M14 4v4h4'></path><path d='M8 12h8'></path><path d='M8 16h5'></path></svg>",
+        billingWindow: "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='4' y='5' width='16' height='15' rx='3'></rect><path d='M8 3v4'></path><path d='M16 3v4'></path><path d='M4 10h16'></path></svg>",
+        daysLeft: "<svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='8'></circle><path d='M12 8v5'></path><path d='M12 12h3'></path></svg>",
+      })
+
       const renderEditorIconPreview = () => {
         const customIcon = sanitizeIconDataUrl(state.editorIconDataUrl)
         const domain = parseDomain(dom.fUrl.value)
@@ -1131,10 +1139,10 @@
         const totalSpentLabel = renewalSummary.hasHistory
           ? formatMoneyLabel(renewalSummary.totalSpent, lastRenewal?.currency || s.currency)
           : 'Not tracked'
-        const lastRenewalLabel = lastRenewal
-          ? `${formatMoneyLabel(lastRenewal.amount, lastRenewal.currency)} · ${lastRenewal.paidAt}`
-          : 'Not tracked'
-        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate} (${p.leftText})` : 'Not scheduled'
+        const lastRenewalLabel = lastRenewal ? formatMoneyLabel(lastRenewal.amount, lastRenewal.currency) : 'Not tracked'
+        const lastRenewalMeta = lastRenewal ? lastRenewal.paidAt : 'No renewals'
+        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate}` : 'Not scheduled'
+        const leftLabel = !p.scheduled ? '-' : cardStatus === 'expired' ? 'Expired' : p.leftText
         const progressTone = cardStatus === 'cancelled'
           ? 'progress-cancelled'
           : (!p.scheduled || cardStatus === 'expired' ? 'progress-expired' : 'progress-active')
@@ -1169,12 +1177,41 @@
             <span class="chip ${esc(cardStatus)}">${esc(cardStatus)}</span>
           </div>
 
-          <div class="card-metrics">
-            <div class="kv kv-primary"><small>Renewal price</small><b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b></div>
-            <div class="kv kv-primary"><small>Total spent</small><b class="${renewalSummary.hasHistory ? '' : 'is-empty'}">${esc(totalSpentLabel)}</b></div>
+          <div class="card-metrics card-secondary">
+            <div class="stat-pill" title="Renewal price">
+              <span class="stat-icon">${CARD_ICON.renewalPrice}</span>
+              <div class="stat-copy">
+                <b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b>
+                <small>Default</small>
+              </div>
+            </div>
+            <div class="stat-pill" title="Total spent">
+              <span class="stat-icon">${CARD_ICON.totalSpent}</span>
+              <div class="stat-copy">
+                <b class="${renewalSummary.hasHistory ? '' : 'is-empty'}">${esc(totalSpentLabel)}</b>
+                <small>Total</small>
+              </div>
+            </div>
           </div>
-          <div class="kv card-secondary"><small>Last paid</small><b class="${lastRenewal ? '' : 'is-empty'}">${esc(lastRenewalLabel)}</b></div>
-          <div class="kv card-secondary"><small>Billing window</small><b class="${startDate && endDate ? '' : 'is-empty'}">${esc(dateRangeLabel)}</b></div>
+          <div class="card-meta card-secondary">
+            <div class="meta-pill" title="Last paid">
+              <span class="meta-icon">${CARD_ICON.lastPaid}</span>
+              <div class="meta-copy">
+                <b class="${lastRenewal ? '' : 'is-empty'}">${esc(lastRenewalLabel)}</b>
+                <small>${esc(lastRenewalMeta)}</small>
+              </div>
+            </div>
+          </div>
+          <div class="card-meta card-secondary">
+            <div class="meta-pill ${startDate && endDate ? '' : 'is-empty'}" title="Billing window">
+              <span class="meta-icon">${CARD_ICON.billingWindow}</span>
+              <span class="meta-text">${esc(dateRangeLabel)}</span>
+            </div>
+            <div class="meta-pill ${p.scheduled ? '' : 'is-empty'}" title="Days left">
+              <span class="meta-icon">${CARD_ICON.daysLeft}</span>
+              <span class="meta-text">${esc(leftLabel)}</span>
+            </div>
+          </div>
           <div class="progress card-secondary ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
         `
 

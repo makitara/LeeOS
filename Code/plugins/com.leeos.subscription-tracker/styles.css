@@ -708,6 +708,97 @@
         gap: 6px;
       }
 
+      .stat-pill,
+      .meta-pill {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--surface) 66%, transparent);
+      }
+
+      .stat-pill {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 6px 7px;
+      }
+
+      .stat-icon,
+      .meta-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+        color: color-mix(in srgb, var(--accent) 70%, var(--text));
+      }
+
+      .stat-icon svg,
+      .meta-icon svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .stat-copy {
+        min-width: 0;
+        display: grid;
+        gap: 1px;
+      }
+
+      .stat-copy b,
+      .meta-copy b {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .stat-copy small,
+      .meta-copy small {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .card-meta {
+        display: grid;
+        gap: 6px;
+      }
+
+      .meta-pill {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 6px 7px;
+      }
+
+      .meta-pill.is-empty .meta-icon,
+      .meta-pill.is-empty .meta-text {
+        color: var(--muted);
+      }
+
+      .meta-copy,
+      .meta-text {
+        min-width: 0;
+      }
+
+      .meta-text {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       .kv {
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -1235,4 +1326,14 @@
         .new-sub-btn { padding: 6px 8px; }
         .form { grid-template-columns: 1fr; }
         .card-metrics { grid-template-columns: 1fr; }
+        .card-head {
+          grid-template-columns: 34px minmax(0, 1fr) auto;
+        }
+        .chip {
+          grid-column: 2 / -1;
+          justify-self: start;
+        }
+        .card-actions {
+          justify-self: end;
+        }
       }
