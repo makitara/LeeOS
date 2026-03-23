@@ -143,6 +143,7 @@
           '- `subscriptions`: 订阅数组，每项包含：',
           '  - `id`, `name`, `url`, `price`, `currency`, `categoryId`, `status`',
           '  - `startDate`, `endDate`, `iconDataUrl`, `note`',
+          '  - `renewalHistory`: 续费记录数组，每项 `{ id, paidAt, amount, currency, startDate, endDate }`',
           '',
           '## 兼容旧文件',
           '若目录中仍存在以下旧文件，可以忽略：',
@@ -176,7 +177,7 @@
 
       const saveAll = async () => {
         await writeStorageJson(FILE_DATA, {
-          schemaVersion: 3,
+          schemaVersion: 4,
           updatedAt: new Date().toISOString(),
           categories: state.categories,
           subscriptions: state.subscriptions,

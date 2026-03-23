@@ -69,9 +69,14 @@
         if (!Number.isFinite(parsed) || parsed < 0) return null
         return parsed
       }
+      const normalizeCurrency = (value, fallback = 'CNY') => {
+        const next = String(value || fallback).trim().toUpperCase().slice(0, 8)
+        return next || fallback
+      }
 
       const MAX_ICON_SIZE_BYTES = 2 * 1024 * 1024
       const FAVICON_CACHE_TTL_MS = 30 * 1000
+      const DEFAULT_RENEWAL_WINDOW_DAYS = 30
       const ALLOWED_ICON_TYPES = new Set([
         'image/png',
         'image/jpeg',
@@ -169,6 +174,58 @@
         return 'active'
       }
 
+      const normalizeRenewalRecord = (record) => {
+        if (!record || typeof record !== 'object') return null
+        const amount = normalizePrice(record.amount)
+        const startDate = normalizeIsoDate(record.startDate, '')
+        const endDate = normalizeIsoDate(record.endDate, '')
+        if (amount === null || !startDate || !endDate || startDate > endDate) return null
+        return {
+          id: typeof record.id === 'string' && record.id ? record.id : uid('renew'),
+          paidAt: normalizeIsoDate(record.paidAt, endDate || todayIso()),
+          amount,
+          currency: normalizeCurrency(record.currency),
+          startDate,
+          endDate,
+        }
+      }
+
+      const summarizeRenewalHistory = (history) => {
+        const normalized = Array.isArray(history)
+          ? history
+            .map((entry) => normalizeRenewalRecord(entry))
+            .filter(Boolean)
+            .sort((left, right) => {
+              const leftKey = `${left.paidAt}|${left.endDate}|${left.id}`
+              const rightKey = `${right.paidAt}|${right.endDate}|${right.id}`
+              return rightKey.localeCompare(leftKey)
+            })
+          : []
+
+        const totalSpent = normalized.reduce((sum, entry) => sum + entry.amount, 0)
+        return {
+          entries: normalized,
+          lastEntry: normalized[0] || null,
+          totalSpent,
+          hasHistory: normalized.length > 0,
+        }
+      }
+
+      const buildRenewalDraft = (subscription) => {
+        const { startDate, endDate } = resolveDateRange(subscription)
+        const cycleDays = startDate && endDate
+          ? Math.max(1, diffDays(startDate, endDate))
+          : DEFAULT_RENEWAL_WINDOW_DAYS
+        const nextStartDate = endDate || todayIso()
+        return {
+          paidAt: todayIso(),
+          amount: normalizePrice(subscription?.price),
+          currency: normalizeCurrency(subscription?.currency),
+          startDate: nextStartDate,
+          endDate: addDaysIso(nextStartDate, cycleDays),
+        }
+      }
+
       const faviconSources = (domain, urlLike = '') => {
         const candidates = []
         const normalizedUrl = normalizeUrl(urlLike)
@@ -206,6 +263,7 @@
     normalizeUrl,
     parseDomain,
     normalizePrice,
+    normalizeCurrency,
     MAX_ICON_SIZE_BYTES,
     isAllowedIconFile,
     sanitizeIconDataUrl,
@@ -218,6 +276,9 @@
     resolveDateRange,
     progress,
     resolveCardStatus,
+    normalizeRenewalRecord,
+    summarizeRenewalHistory,
+    buildRenewalDraft,
     faviconSources,
   })
 })()

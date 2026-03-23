@@ -17,6 +17,7 @@
         normalizeUrl,
         parseDomain,
         normalizePrice,
+        normalizeCurrency,
         MAX_ICON_SIZE_BYTES,
         isAllowedIconFile,
         sanitizeIconDataUrl,
@@ -29,6 +30,9 @@
         resolveDateRange,
         progress,
         resolveCardStatus,
+        normalizeRenewalRecord,
+        summarizeRenewalHistory,
+        buildRenewalDraft,
         faviconSources,
       } = trackerShared
 
@@ -57,6 +61,7 @@
         boardHasBootAnimated: false,
         categoryListHasBootAnimated: false,
         pendingCategoryPulseKey: '',
+        renewingId: null,
       }
 
       const $ = (id) => document.getElementById(id)
@@ -90,8 +95,26 @@
         clearIconBtn: $('clearIconBtn'),
         createCategoryBtn: $('createCategoryBtn'),
         globalNotice: $('globalNotice'),
+        renewalEditor: $('renewalEditor'),
+        renewalEditorForm: $('renewalEditorForm'),
+        renewalEditorTitle: $('renewalEditorTitle'),
+        renewalEditorContext: $('renewalEditorContext'),
+        renewalEditorError: $('renewalEditorError'),
+        renewalSaveBtn: $('renewalSaveBtn'),
+        cancelRenewalBtn: $('cancelRenewalBtn'),
+        fRenewalAmount: $('fRenewalAmount'),
+        fRenewalCurrency: $('fRenewalCurrency'),
+        fRenewalPaidAt: $('fRenewalPaidAt'),
+        fRenewalStartDate: $('fRenewalStartDate'),
+        fRenewalEndDate: $('fRenewalEndDate'),
       }
       let globalNoticeTimer = 0
+
+      const formatMoneyLabel = (amount, currency) => {
+        const value = normalizePrice(amount)
+        if (value === null) return 'Not set'
+        return `${normalizeCurrency(currency)} ${value.toFixed(2)}`
+      }
 
       const renderEditorIconPreview = () => {
         const customIcon = sanitizeIconDataUrl(state.editorIconDataUrl)
@@ -316,6 +339,103 @@
         if (!(btn instanceof HTMLButtonElement)) return
         btn.textContent = 'Delete'
         btn.dataset.baseLabel = 'Delete'
+      }
+
+      const resetRenewalEditor = () => {
+        state.renewingId = null
+        setFormError(dom.renewalEditorError, '')
+        setButtonPending(dom.renewalSaveBtn, 'Saving...', false)
+        dom.renewalEditorForm?.reset()
+        dom.fRenewalCurrency.value = 'CNY'
+        dom.fRenewalPaidAt.value = todayIso()
+        dom.fRenewalStartDate.value = ''
+        dom.fRenewalEndDate.value = ''
+        dom.renewalEditorContext.textContent = ''
+      }
+
+      const closeRenewalEditor = () => {
+        resetRenewalEditor()
+        if (dom.renewalEditor.open) {
+          dom.renewalEditor.close()
+        }
+      }
+
+      const openRenewalEditor = (subscription) => {
+        if (!subscription?.id) return
+        const draft = buildRenewalDraft(subscription)
+        resetRenewalEditor()
+        state.renewingId = subscription.id
+        dom.renewalEditorTitle.textContent = `Renew ${subscription.name}`
+        dom.renewalEditorContext.textContent = `Record a payment and update the billing window for ${subscription.name}.`
+        dom.fRenewalAmount.value = draft.amount === null ? '' : String(draft.amount)
+        dom.fRenewalCurrency.value = draft.currency
+        dom.fRenewalPaidAt.value = draft.paidAt
+        dom.fRenewalStartDate.value = draft.startDate
+        dom.fRenewalEndDate.value = draft.endDate
+        dom.renewalEditor.showModal()
+      }
+
+      const collectRenewalForm = () => {
+        const amount = normalizePrice(dom.fRenewalAmount.value)
+        const currency = normalizeCurrency(dom.fRenewalCurrency.value)
+        const paidAt = normalizeIsoDate(dom.fRenewalPaidAt.value, todayIso())
+        const startDate = normalizeIsoDate(dom.fRenewalStartDate.value, '')
+        const endDate = normalizeIsoDate(dom.fRenewalEndDate.value, '')
+        if (amount === null) throw createEditorValidationError('renewalAmount', 'Paid amount is required')
+        if (!startDate) throw createEditorValidationError('renewalStartDate', 'Start date is required')
+        if (!endDate) throw createEditorValidationError('renewalEndDate', 'End date is required')
+        if (startDate > endDate) {
+          throw createEditorValidationError('renewalEndDate', 'End date must be after start date')
+        }
+        return {
+          id: uid('renew'),
+          paidAt,
+          amount,
+          currency,
+          startDate,
+          endDate,
+        }
+      }
+
+      const submitRenewalSave = async () => {
+        setFormError(dom.renewalEditorError, '')
+        let payload
+        try {
+          payload = collectRenewalForm()
+        } catch (err) {
+          setFormError(dom.renewalEditorError, err instanceof Error ? err.message : 'Save renewal failed.')
+          return
+        }
+
+        const targetId = state.renewingId
+        if (!targetId) {
+          setFormError(dom.renewalEditorError, 'Subscription not found. Reopen and try again.')
+          return
+        }
+
+        setButtonPending(dom.renewalSaveBtn, 'Saving...', true)
+        try {
+          await runStoreTransaction(() => {
+            const target = state.subscriptions.find((subscription) => subscription.id === targetId)
+            if (!target) throw new Error('Subscription not found. Reopen and try again.')
+            const renewalHistory = summarizeRenewalHistory(target.renewalHistory).entries
+            renewalHistory.unshift(payload)
+            target.renewalHistory = renewalHistory
+            target.startDate = payload.startDate
+            target.endDate = payload.endDate
+            target.currency = payload.currency
+            target.status = 'active'
+            if (normalizePrice(target.price) === null) {
+              target.price = payload.amount
+            }
+          })
+          closeRenewalEditor()
+          renderBoard()
+        } catch (err) {
+          setFormError(dom.renewalEditorError, err instanceof Error ? err.message : 'Save renewal failed.')
+        } finally {
+          setButtonPending(dom.renewalSaveBtn, 'Saving...', false)
+        }
       }
 
       const syncOpenDataDirButton = async () => {
@@ -1005,9 +1125,15 @@
         const categoryLabel = categoryNameById(s.categoryId)
         const priceValue = normalizePrice(s.price)
         const { startDate, endDate } = resolveDateRange(s)
-        const priceLabel = priceValue === null
-          ? 'Not set'
-          : `${(s.currency || 'CNY').toUpperCase()} ${priceValue.toFixed(2)}`
+        const renewalSummary = summarizeRenewalHistory(s.renewalHistory)
+        const lastRenewal = renewalSummary.lastEntry
+        const priceLabel = formatMoneyLabel(priceValue, s.currency)
+        const totalSpentLabel = renewalSummary.hasHistory
+          ? formatMoneyLabel(renewalSummary.totalSpent, lastRenewal?.currency || s.currency)
+          : 'Not tracked'
+        const lastRenewalLabel = lastRenewal
+          ? `${formatMoneyLabel(lastRenewal.amount, lastRenewal.currency)} · ${lastRenewal.paidAt}`
+          : 'Not tracked'
         const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate} (${p.leftText})` : 'Not scheduled'
         const progressTone = cardStatus === 'cancelled'
           ? 'progress-cancelled'
@@ -1023,6 +1149,7 @@
                 ? `<img src="${esc(cachedFavicon)}" data-cached-favicon="true" data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`
                 : `<img data-srcs='${esc(JSON.stringify(faviconSources(domain, s.url)))}' data-domain="${esc(domain)}" alt="${esc(s.name)} icon">`))
             : defaultIconMarkup())
+        const renewButtonMarkup = '<button type="button" class="card-link-btn card-renew-btn" data-renew="true" title="Record renewal" aria-label="Record renewal">Renew</button>'
         const openUrlButtonMarkup = s.url
           ? `<button type="button" class="card-link-btn" data-open-url="true" title="Open subscription URL" aria-label="Open subscription URL">Open</button>`
           : ''
@@ -1038,11 +1165,15 @@
               <p class="name">${esc(s.name)}</p>
               <div class="card-submeta"><span class="category-badge">${esc(categoryLabel)}</span></div>
             </div>
-            ${openUrlButtonMarkup}
+            <div class="card-actions">${openUrlButtonMarkup}${renewButtonMarkup}</div>
             <span class="chip ${esc(cardStatus)}">${esc(cardStatus)}</span>
           </div>
 
-          <div class="kv kv-primary"><small>Price</small><b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b></div>
+          <div class="card-metrics">
+            <div class="kv kv-primary"><small>Renewal price</small><b class="${priceValue === null ? 'is-empty' : ''}">${esc(priceLabel)}</b></div>
+            <div class="kv kv-primary"><small>Total spent</small><b class="${renewalSummary.hasHistory ? '' : 'is-empty'}">${esc(totalSpentLabel)}</b></div>
+          </div>
+          <div class="kv card-secondary"><small>Last paid</small><b class="${lastRenewal ? '' : 'is-empty'}">${esc(lastRenewalLabel)}</b></div>
           <div class="kv card-secondary"><small>Billing window</small><b class="${startDate && endDate ? '' : 'is-empty'}">${esc(dateRangeLabel)}</b></div>
           <div class="progress card-secondary ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
         `
@@ -1098,6 +1229,14 @@
           openUrlButton.addEventListener('click', (e) => {
             e.stopPropagation()
             void openSubscriptionUrl(s.url)
+          })
+        }
+
+        const renewButton = card.querySelector('[data-renew="true"]')
+        if (renewButton instanceof HTMLButtonElement) {
+          renewButton.addEventListener('click', (e) => {
+            e.stopPropagation()
+            openRenewalEditor(s)
           })
         }
 
@@ -1287,7 +1426,7 @@
             dom.fName.value = s.name || ''
             dom.fUrl.value = s.url || ''
             dom.fPrice.value = String(s.price ?? '')
-            dom.fCurrency.value = s.currency || 'CNY'
+            dom.fCurrency.value = normalizeCurrency(s.currency)
             dom.fCategory.value = s.categoryId || ''
             dom.fStatus.value = s.status === 'cancelled' ? 'cancelled' : 'active'
             const { startDate, endDate } = resolveDateRange(s)
@@ -1318,7 +1457,7 @@
         const url = urlRaw ? normalizeUrl(urlRaw) : ''
         const priceRaw = dom.fPrice.value.trim()
         const price = normalizePrice(priceRaw)
-        const currency = (dom.fCurrency.value.trim().toUpperCase() || 'CNY').slice(0, 8)
+        const currency = normalizeCurrency(dom.fCurrency.value)
         const categoryId = dom.fCategory.value || ''
         const status = dom.fStatus.value === 'cancelled' ? 'cancelled' : 'active'
         const startDate = normalizeIsoDate(dom.fStartDate.value, '')
@@ -1333,6 +1472,26 @@
         }
 
         return { name, url, price, currency, categoryId, status, startDate, endDate, iconDataUrl: sanitizeIconDataUrl(state.editorIconDataUrl), note }
+      }
+
+      const bindRenewalEvents = () => {
+        if (dom.renewalSaveBtn.dataset.boundRenewal === 'true') return
+        dom.renewalSaveBtn.dataset.boundRenewal = 'true'
+
+        dom.cancelRenewalBtn.addEventListener('click', () => {
+          closeRenewalEditor()
+        })
+        dom.renewalEditor.addEventListener('cancel', (e) => {
+          e.preventDefault()
+          closeRenewalEditor()
+        })
+        dom.renewalSaveBtn.addEventListener('click', () => {
+          void submitRenewalSave()
+        })
+        dom.renewalEditorForm.addEventListener('submit', async (e) => {
+          e.preventDefault()
+          await submitRenewalSave()
+        })
       }
 
       const normalizeLoaded = () => {
@@ -1352,20 +1511,21 @@
               name: String(s.name || '').trim().slice(0, 80),
               url: normalizeUrl(s.url || ''),
               price: normalizePrice(s.price),
-              currency: String(s.currency || 'CNY').toUpperCase().slice(0, 8),
+              currency: normalizeCurrency(s.currency),
               categoryId,
               status: s.status === 'cancelled' ? 'cancelled' : 'active',
               startDate: resolveDateRange(s).startDate,
               endDate: resolveDateRange(s).endDate,
               iconDataUrl: sanitizeIconDataUrl(s.iconDataUrl),
               note: String(s.note || '').slice(0, 300),
+              renewalHistory: summarizeRenewalHistory(s.renewalHistory).entries,
             }
           })
       }
 
       const needsStoreMigration = (dataStore) => {
         if (!dataStore || typeof dataStore !== 'object') return false
-        if (Number(dataStore.schemaVersion) < 3) return true
+        if (Number(dataStore.schemaVersion) < 4) return true
         return state.subscriptions.some((subscription) => {
           if (!subscription || typeof subscription !== 'object') return false
           return (
@@ -1374,6 +1534,7 @@
             || 'nextBillingDate' in subscription
             || !('startDate' in subscription)
             || !('endDate' in subscription)
+            || !Array.isArray(subscription.renewalHistory)
           )
         })
       }
@@ -1495,6 +1656,7 @@
         }
 
         bindEvents()
+        bindRenewalEvents()
         resetEditor()
         renderAll()
       }

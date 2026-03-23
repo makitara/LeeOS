@@ -676,6 +676,12 @@
       .chip.expired { border-color: var(--chip-expired-line); background: var(--chip-expired-bg); color: var(--chip-expired-text); }
       .chip.cancelled { border-color: var(--chip-cancel-line); background: var(--chip-cancel-bg); color: var(--chip-cancel-text); }
 
+      .card-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       .card-link-btn {
         border: 1px solid var(--line);
         border-radius: 999px;
@@ -689,6 +695,17 @@
       .card-link-btn:hover {
         border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
         background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface));
+      }
+
+      .card-renew-btn {
+        border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+        color: color-mix(in srgb, var(--accent) 74%, var(--text));
+      }
+
+      .card-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
       }
 
       .kv {
@@ -799,6 +816,13 @@
         display: grid;
         gap: 8px;
         background: var(--modal-bg);
+      }
+
+      .renewal-context {
+        margin: -2px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
       }
 
       #categoryCreator {
@@ -1210,4 +1234,5 @@
         .search { width: 148px; }
         .new-sub-btn { padding: 6px 8px; }
         .form { grid-template-columns: 1fr; }
+        .card-metrics { grid-template-columns: 1fr; }
       }

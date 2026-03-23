@@ -46,7 +46,6 @@ function HomePanel() {
           <p className="home-hero__time">{timeText}</p>
           <div className="home-hero__meta">
             <span>Home</span>
-            <span>v{window.LeeOS.version}</span>
           </div>
         </section>
       </div>
