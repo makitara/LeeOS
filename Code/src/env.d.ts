@@ -24,6 +24,7 @@ declare global {
       }
       system: {
         openExternal: (url: string) => Promise<boolean>
+        isGeolocationConfigured: () => Promise<boolean>
       }
     }
   }

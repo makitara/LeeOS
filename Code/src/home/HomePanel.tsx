@@ -5,6 +5,7 @@ import {
   getGreetingText,
   getInitialWeatherState,
   loadWeather as loadWeatherData,
+  MISSING_GEOLOCATION_API_KEY_MESSAGE,
   readCachedWeather,
   shouldRefreshCachedWeather,
   weatherCodeToTheme,
@@ -30,6 +31,7 @@ function HomePanel() {
   const [weather, setWeather] = useState<WeatherState>(() => getInitialWeatherState())
   const [lastReadyWeather, setLastReadyWeather] = useState<WeatherReadyState | null>(() => readCachedWeather())
   const [permissionState, setPermissionState] = useState<GeolocationPermissionState | 'checking'>('checking')
+  const [isGeolocationConfigured, setIsGeolocationConfigured] = useState<boolean | null>(null)
   const [weatherReloadToken, setWeatherReloadToken] = useState(0)
   const greeting = getGreetingText(now)
   const timeText = HOME_TIME_FORMATTER.format(now)
@@ -61,11 +63,15 @@ function HomePanel() {
     let cancelled = false
 
     const bootstrapWeatherPermission = async () => {
-      const nextPermissionState = await getGeolocationPermissionState()
+      const [nextPermissionState, nextGeolocationConfigured] = await Promise.all([
+        getGeolocationPermissionState(),
+        window.LeeOS.system.isGeolocationConfigured().catch(() => true),
+      ])
       if (cancelled) {
         return
       }
       setPermissionState(nextPermissionState)
+      setIsGeolocationConfigured(nextGeolocationConfigured)
     }
 
     void bootstrapWeatherPermission()
@@ -96,6 +102,13 @@ function HomePanel() {
     const controller = new AbortController()
 
     const refreshWeather = async () => {
+      if (isGeolocationConfigured === false) {
+        setWeather({
+          status: 'error',
+          message: MISSING_GEOLOCATION_API_KEY_MESSAGE,
+        })
+        return
+      }
       const cachedWeather = readCachedWeather()
       const isForcedReload = weatherReloadToken > 0
       if (cachedWeather) {
@@ -137,7 +150,7 @@ function HomePanel() {
       }
     }
 
-    if (permissionState === 'checking' || permissionState === 'denied') {
+    if (permissionState === 'checking' || isGeolocationConfigured === null || permissionState === 'denied') {
       return () => {
         cancelled = true
         controller.abort()
@@ -149,7 +162,7 @@ function HomePanel() {
       cancelled = true
       controller.abort()
     }
-  }, [permissionState, weatherReloadToken])
+  }, [isGeolocationConfigured, permissionState, weatherReloadToken])
 
   return (
     <div className="detail__panel detail__home" role="region" aria-label="Home">
@@ -173,9 +186,9 @@ function HomePanel() {
               type="button"
               className="home-action"
               onClick={() => setWeatherReloadToken((value) => value + 1)}
-              disabled={weather.status === 'loading'}
+              disabled={weather.status === 'loading' || isGeolocationConfigured === false}
               aria-label="Refresh weather"
-              title="Refresh weather"
+              title={isGeolocationConfigured === false ? 'Configure VITE_GOOGLE_API_KEY to enable weather' : 'Refresh weather'}
             >
               {weather.status === 'loading' ? 'Refreshing' : 'Refresh'}
             </button>

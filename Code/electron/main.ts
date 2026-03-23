@@ -7,7 +7,18 @@ import { LEEOS_FS_CAPABILITIES, LEEOS_METHOD } from '../src/shared/capabilities'
 
 const isDev = !app.isPackaged
 const APP_DISPLAY_NAME = 'LeeOS'
+const GEOLOCATION_API_KEY = (
+  process.env.LEEOS_GOOGLE_API_KEY?.trim()
+  || process.env.GOOGLE_API_KEY?.trim()
+  || import.meta.env.VITE_GOOGLE_API_KEY?.trim()
+  || ''
+)
 app.setName(APP_DISPLAY_NAME)
+if (GEOLOCATION_API_KEY) {
+  process.env.GOOGLE_API_KEY = GEOLOCATION_API_KEY
+} else if (isDev) {
+  console.warn('[LeeOS] GOOGLE_API_KEY is not configured. Home weather geolocation will be unavailable.')
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = isDev
   ? path.join(app.getAppPath(), 'plugins')
@@ -53,9 +64,8 @@ const isAllowedGeolocationRequest = (context: {
   requestingOrigin: string
   requestingUrl?: string
   embeddingUrl: string
-  isMainFrame: boolean
 }) => {
-  if (!context.isMainFrame || !isHostRendererUrl(context.embeddingUrl)) {
+  if (!isHostRendererUrl(context.embeddingUrl)) {
     return false
   }
   if (isHostRequestOrigin(context.requestingOrigin)) {
@@ -80,8 +90,7 @@ const configurePermissionHandlers = () => {
     return isAllowedGeolocationRequest({
       requestingOrigin,
       requestingUrl: details.requestingUrl,
-      embeddingUrl: webContents.getURL(),
-      isMainFrame: details.isMainFrame,
+      embeddingUrl: webContents?.getURL() ?? details.embeddingOrigin ?? '',
     })
   })
   ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
@@ -98,7 +107,6 @@ const configurePermissionHandlers = () => {
       requestingOrigin: requestDetails.requestingOrigin ?? '',
       requestingUrl: requestDetails.requestingUrl,
       embeddingUrl: webContents.getURL(),
-      isMainFrame: requestDetails.isMainFrame === true,
     })
     if (isDev && !allow) {
       console.warn(
@@ -735,6 +743,7 @@ app.whenReady().then(async () => {
       return false
     }
   })
+  ipcMain.handle('leeos.system.isGeolocationConfigured', () => Boolean(GEOLOCATION_API_KEY))
   createMainWindow()
 
   app.on('activate', () => {

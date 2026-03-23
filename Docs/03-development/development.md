@@ -9,6 +9,19 @@
 - `npm install`
 - `npm run dev`
 
+## Home 天气配置
+Electron 官方要求 geolocation 使用 Google Cloud 的 geolocation webservice。没有 key 时，Home 天气在打包态通常只会返回不可用，不会形成你期望的首次授权链路。
+
+本地开发或本地打包前，先配置：
+1. 复制示例文件：`cp Code/.env.example Code/.env.local`
+2. 填入：`VITE_GOOGLE_API_KEY=你的_key`
+3. 重新运行：`npm -C Code run dev` 或 `npm -C Code run smoke:mac`
+
+注意：
+- 新建 key 后，还需要在 Google Cloud 里启用 Geolocation API。
+- 这个 API 需要 Billing 才能工作。
+- 如果要让 GitHub Release 产出的安装包也可用，需要在仓库 Secrets 里配置 `VITE_GOOGLE_API_KEY`。
+
 ## 数据目录
 - 当前开发态与安装态默认共用：`~/Library/Application Support/LeeOS/`
 

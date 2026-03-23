@@ -64,6 +64,8 @@ const GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000
 const WEATHER_REFRESH_INTERVAL_MS = 20 * 60 * 1000
 const WEATHER_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000
 const WEATHER_CACHE_KEY = 'leeos:home-weather-cache:v1'
+export const MISSING_GEOLOCATION_API_KEY_MESSAGE =
+  'Home weather is not configured for this build. Add VITE_GOOGLE_API_KEY and rebuild.'
 const WEATHER_UPDATED_FORMATTER = new Intl.DateTimeFormat('en-US', {
   hour: '2-digit',
   minute: '2-digit',
@@ -176,7 +178,7 @@ export const formatWeatherError = (error: unknown) => {
       return 'Location permission was denied. Please allow LeeOS in system settings.'
     }
     if (geoError.code === geoError.POSITION_UNAVAILABLE) {
-      return 'Current location is unavailable. Please try again.'
+      return 'Current location is unavailable. Check your network or geolocation API key, then try again.'
     }
     if (geoError.code === geoError.TIMEOUT) {
       return 'Location request timed out. Please try again.'
