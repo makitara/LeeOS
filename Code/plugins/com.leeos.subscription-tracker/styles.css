@@ -831,8 +831,7 @@
         align-items: center;
       }
 
-      .timeline-figure__icon,
-      .timeline-window__icon {
+      .timeline-figure__icon {
         width: 24px;
         height: 24px;
         border-radius: 7px;
@@ -843,8 +842,7 @@
         color: color-mix(in srgb, var(--accent) 72%, var(--text));
       }
 
-      .timeline-figure__icon svg,
-      .timeline-window__icon svg {
+      .timeline-figure__icon svg {
         width: 14px;
         height: 14px;
         stroke: currentColor;
@@ -860,6 +858,13 @@
         gap: 1px;
       }
 
+      .timeline-figure__value {
+        min-width: 0;
+        display: inline-flex;
+        align-items: flex-end;
+        gap: 4px;
+      }
+
       .timeline-figure__copy b {
         font-size: 18px;
         line-height: 1.05;
@@ -867,10 +872,24 @@
         font-weight: 650;
       }
 
-      .timeline-figure__copy small {
+      .timeline-figure__value.is-date b {
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+
+      .timeline-figure__unit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--surface) 54%, transparent);
         color: var(--muted);
-        font-size: 10px;
-        font-weight: 600;
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
       }
 
       .timeline-status {
@@ -905,24 +924,54 @@
       }
 
       .timeline-figure.is-empty .timeline-figure__copy b,
-      .timeline-window.is-empty .timeline-window__text {
+      .timeline-window.is-empty .timeline-date__text {
         color: var(--muted);
       }
 
       .timeline-window {
         min-width: 0;
         display: grid;
-        grid-template-columns: 24px minmax(0, 1fr);
-        gap: 7px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
         justify-self: stretch;
-        align-items: center;
+        align-items: stretch;
       }
 
-      .timeline-window__text {
+      .timeline-date {
+        min-width: 0;
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 6px;
+        align-items: center;
+        padding: 5px 6px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--surface) 52%, transparent);
+      }
+
+      .timeline-date__icon {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: color-mix(in srgb, var(--accent) 68%, var(--text));
+      }
+
+      .timeline-date__icon svg {
+        width: 13px;
+        height: 13px;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .timeline-date__text {
         max-width: none;
         overflow-wrap: anywhere;
         white-space: normal;
-        line-height: 1.25;
+        line-height: 1.2;
         font-size: 10px;
         color: var(--muted);
       }
@@ -1491,4 +1540,5 @@
         .card-metrics { grid-template-columns: 1fr; }
         .timeline-headline { grid-template-columns: 1fr; }
         .timeline-status { justify-self: start; }
+        .timeline-window { grid-template-columns: 1fr; }
       }

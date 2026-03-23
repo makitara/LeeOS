@@ -157,15 +157,15 @@
 
       const progress = (s) => {
         const { startDate, endDate } = resolveDateRange(s)
-        if (!endDate) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
+        if (!endDate) return { leftText: '-', leftDays: null, pct: 100, scheduled: false, overdue: false }
         const left = daysUntil(endDate)
-        if (!Number.isFinite(left)) return { leftText: '-', pct: 100, scheduled: false, overdue: false }
-        if (left <= 0) return { leftText: `${left}d`, pct: 100, scheduled: true, overdue: true }
-        if (!startDate) return { leftText: `${left}d`, pct: 0, scheduled: true, overdue: false }
+        if (!Number.isFinite(left)) return { leftText: '-', leftDays: null, pct: 100, scheduled: false, overdue: false }
+        if (left <= 0) return { leftText: `${left}d`, leftDays: left, pct: 100, scheduled: true, overdue: true }
+        if (!startDate) return { leftText: `${left}d`, leftDays: left, pct: 0, scheduled: true, overdue: false }
         const totalDays = Math.max(1, diffDays(startDate, endDate))
         const elapsedDays = Math.max(0, Math.min(totalDays, diffDays(startDate, todayIso())))
         const pct = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)))
-        return { leftText: `${left}d`, pct, scheduled: true, overdue: false }
+        return { leftText: `${left}d`, leftDays: left, pct, scheduled: true, overdue: false }
       }
 
       const resolveCardStatus = (s, p) => {

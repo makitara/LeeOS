@@ -124,7 +124,8 @@
         renewalPrice: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M4 7.5h16'></path><path d='M6.5 12h11'></path><path d='M7 16.5h4'></path><rect x='3' y='5' width='18' height='14' rx='3'></rect></svg>",
         totalSpent: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M7 7h10'></path><path d='M7 12h10'></path><path d='M7 17h10'></path><rect x='4' y='4' width='16' height='4' rx='2'></rect><rect x='4' y='9' width='16' height='4' rx='2'></rect><rect x='4' y='14' width='16' height='4' rx='2'></rect></svg>",
         lastPaid: "<svg viewBox='0 0 24 24' aria-hidden='true'><path d='M7 4h10l3 3v13H4V4z'></path><path d='M14 4v4h4'></path><path d='M8 12h8'></path><path d='M8 16h5'></path></svg>",
-        billingWindow: "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='4' y='5' width='16' height='15' rx='3'></rect><path d='M8 3v4'></path><path d='M16 3v4'></path><path d='M4 10h16'></path></svg>",
+        startDate: "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='4' y='5' width='16' height='15' rx='3'></rect><path d='M8 3v4'></path><path d='M16 3v4'></path><path d='M4 10h16'></path><circle cx='9' cy='14' r='1.5' fill='currentColor' stroke='none'></circle></svg>",
+        endDate: "<svg viewBox='0 0 24 24' aria-hidden='true'><rect x='4' y='5' width='16' height='15' rx='3'></rect><path d='M8 3v4'></path><path d='M16 3v4'></path><path d='M4 10h16'></path><path d='M8.5 15.5l2 2 4.5-5'></path></svg>",
         daysLeft: "<svg viewBox='0 0 24 24' aria-hidden='true'><circle cx='12' cy='12' r='8'></circle><path d='M12 8v5'></path><path d='M12 12h3'></path></svg>",
       })
 
@@ -1163,8 +1164,14 @@
           : ''
         const lastRenewalLabel = lastRenewal ? formatMoneyLabel(lastRenewal.amount, lastRenewal.currency) : ''
         const lastRenewalMeta = lastRenewal ? `${lastRenewalLabel} · ${lastRenewal.paidAt}` : 'No renewals yet'
-        const dateRangeLabel = startDate && endDate ? `${startDate} → ${endDate}` : 'Dates not set'
-        const leftLabel = !p.scheduled ? '-' : cardStatus === 'expired' ? 'Expired' : p.leftText
+        const leftDays = Number.isFinite(p.leftDays) ? p.leftDays : null
+        const shortEndDateLabel = endDate ? endDate.slice(5).replace('-', '/') : '--'
+        const leftValue = !p.scheduled
+          ? '--'
+          : cardStatus === 'cancelled'
+            ? shortEndDateLabel
+            : String(Math.max(0, leftDays ?? 0))
+        const leftUnit = cardStatus === 'active' || cardStatus === 'expired' ? 'd' : ''
         const progressSummaryLabel = !p.scheduled
           ? 'Dates not set'
           : cardStatus === 'cancelled'
@@ -1228,16 +1235,24 @@
               <div class="timeline-figure ${p.scheduled ? '' : 'is-empty'}">
                 <span class="timeline-figure__icon">${CARD_ICON.daysLeft}</span>
                 <div class="timeline-figure__copy">
-                  <b>${esc(leftLabel)}</b>
-                  <small>Days left</small>
+                  <div class="timeline-figure__value ${cardStatus === 'cancelled' ? 'is-date' : ''}">
+                    <b>${esc(leftValue)}</b>
+                    ${leftUnit ? `<span class="timeline-figure__unit">${esc(leftUnit)}</span>` : ''}
+                  </div>
                 </div>
               </div>
               <span class="timeline-status ${esc(progressTone)}">${esc(progressSummaryLabel)}</span>
             </div>
             <div class="progress progress-hero ${esc(progressTone)}"><span style="width:${progressPct}%"></span></div>
             <div class="timeline-window ${startDate && endDate ? '' : 'is-empty'}">
-              <span class="timeline-window__icon">${CARD_ICON.billingWindow}</span>
-              <span class="timeline-window__text">${esc(dateRangeLabel)}</span>
+              <span class="timeline-date">
+                <span class="timeline-date__icon">${CARD_ICON.startDate}</span>
+                <span class="timeline-date__text">${esc(startDate || '--')}</span>
+              </span>
+              <span class="timeline-date">
+                <span class="timeline-date__icon">${CARD_ICON.endDate}</span>
+                <span class="timeline-date__text">${esc(endDate || '--')}</span>
+              </span>
             </div>
           </div>
         `
