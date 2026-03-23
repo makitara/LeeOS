@@ -9,15 +9,14 @@
 - `npm install`
 - `npm run dev`
 
-## 开发数据 vs 正式数据
-- 开发态（`npm -C Code run dev`）默认使用：`~/Library/Application Support/LeeOS Dev/`
-- 打包态 / 安装态默认使用：`~/Library/Application Support/LeeOS/`
+## 数据目录
+- 当前开发态与安装态默认共用：`~/Library/Application Support/LeeOS/`
 
-这样做的目的很直接：
-- 日常开发不污染你正式安装版的数据
-- 调试迁移、权限、升级路径时，不会把开发试验和正式使用混在一起
+这意味着：
+- 开发态看到的效果更接近你现在机器里的真实使用状态
+- 调试时对数据结构的修改会直接作用到这份本地数据
 
-如果你要验证“真实用户升级路径”，不要用开发态，改用下面的打包态冒烟流程。
+如果你要验证“真实用户升级路径”或做破坏性实验，建议先自己备份 `~/Library/Application Support/LeeOS/plugin-data/`，再继续测试。
 
 ## 插件开发（静态插件）
 1. 在 `Code/plugins/` 下创建目录：`Code/plugins/<plugin-id>/`

@@ -8,9 +8,6 @@ import { LEEOS_FS_CAPABILITIES, LEEOS_METHOD } from '../src/shared/capabilities'
 const isDev = !app.isPackaged
 const APP_DISPLAY_NAME = 'LeeOS'
 app.setName(APP_DISPLAY_NAME)
-if (isDev) {
-  app.setPath('userData', path.join(app.getPath('appData'), `${APP_DISPLAY_NAME} Dev`))
-}
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = isDev
   ? path.join(app.getAppPath(), 'plugins')
