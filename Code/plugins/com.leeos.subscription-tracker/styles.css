@@ -514,6 +514,9 @@
         gap: 7px;
         align-content: start;
         min-width: 0;
+        box-sizing: border-box;
+        padding: 0 10px 8px 0;
+        scrollbar-gutter: stable;
       }
 
       .card {
