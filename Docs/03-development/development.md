@@ -50,11 +50,10 @@
 
 说明：
 - GitHub 已接入发布流程：推送形如 `v0.1.0` 的 tag 后，GitHub Actions 会自动构建 macOS `dmg`/`zip` 并挂到 Release。
-- Release 现在也会上传自动更新所需的 `latest-mac.yml` 和 `.blockmap` 文件，供应用内更新器读取。
-- 打包后的 LeeOS 会在启动时自动检查更新，并在后台定期再次检查；菜单里也可以手动点 `LeeOS -> Check for Updates...`。
+- 打包后的 LeeOS 会在启动时自动检查 GitHub Release，并在后台定期再次检查；菜单里也可以手动点 `LeeOS -> Check for Updates...`。
+- 检测到新版本后，应用会引导用户去下载新的安装包；当前不做应用内自动安装。
 - 当前为未签名构建；后续如接入 Apple 开发者证书，再补签名与 notarization。
-- macOS 自动更新真正面向用户可用，仍依赖已签名的发布包；当前未签名 / ad-hoc 构建主要用于把更新链路接通和本地验证。
-- `dist:mac` 会生成 `dmg` / `zip` / blockmap / `release/**`，只适合发布候选验证，不适合日常开发反复跑。
+- `dist:mac` 会生成 `dmg` / `zip` / `release/**`，只适合发布候选验证，不适合日常开发反复跑。
 
 ## 推荐验证工作流
 1. 日常改 UI / 逻辑：

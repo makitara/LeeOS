@@ -23,7 +23,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "electron-updater": "^6.8.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -73,13 +72,6 @@
         "dmg",
         "zip"
       ]
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "makitara",
-        "repo": "LeeOS"
-      }
-    ]
+    }
   }
 }
