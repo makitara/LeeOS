@@ -12,6 +12,7 @@ jobs:
   build-macos:
     runs-on: macos-14
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       ELECTRON_BUILDER_CACHE: .cache/electron-builder
       ELECTRON_CACHE: .cache/electron
@@ -19,10 +20,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -41,7 +42,7 @@ jobs:
         run: npm run dist:mac
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: leeos-macos-${{ github.ref_name }}
           if-no-files-found: error
@@ -50,10 +51,23 @@ jobs:
             Code/release/*.zip
 
       - name: Publish GitHub release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
-            Code/release/*.dmg
-            Code/release/*.zip
+        run: |
+          set -euo pipefail
+
+          prerelease_flag=()
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            prerelease_flag+=(--prerelease)
+          fi
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              Code/release/*.dmg \
+              Code/release/*.zip \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              Code/release/*.dmg \
+              Code/release/*.zip \
+              --generate-notes \
+              "${prerelease_flag[@]}"
+          fi
