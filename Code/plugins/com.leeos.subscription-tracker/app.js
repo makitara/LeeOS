@@ -528,10 +528,9 @@
                 </div>
               </div>
               <div class="renewal-row__actions">
-                <button type="button" class="renewal-row__action" data-renewal-action="edit" data-renewal-id="${esc(entry.id)}">Edit</button>
+                <button type="button" class="renewal-row__action ${deleteArmed ? 'renewal-row__action--quiet' : ''}" data-renewal-action="${deleteArmed ? 'cancel-delete' : 'edit'}" data-renewal-id="${esc(entry.id)}">${deleteArmed ? 'Cancel' : 'Edit'}</button>
                 ${deleteArmed
                   ? `
-                    <button type="button" class="renewal-row__action renewal-row__action--quiet" data-renewal-action="cancel-delete" data-renewal-id="${esc(entry.id)}">Cancel</button>
                     <button type="button" class="renewal-row__action renewal-row__action--danger is-armed" data-renewal-action="confirm-delete" data-renewal-id="${esc(entry.id)}">Confirm</button>
                   `
                   : `<button type="button" class="renewal-row__action renewal-row__action--danger" data-renewal-action="delete" data-renewal-id="${esc(entry.id)}">Delete</button>`}
