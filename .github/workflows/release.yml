@@ -54,20 +54,56 @@ jobs:
         run: |
           set -euo pipefail
 
-          prerelease_flag=()
+          prerelease=false
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            prerelease_flag+=(--prerelease)
+            prerelease=true
           fi
 
-          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" \
-              Code/release/*.dmg \
-              Code/release/*.zip \
-              --clobber
-          else
-            gh release create "${GITHUB_REF_NAME}" \
-              Code/release/*.dmg \
-              Code/release/*.zip \
-              --generate-notes \
-              "${prerelease_flag[@]}"
+          api_root="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          release_response="$(mktemp)"
+
+          release_status="$(
+            curl -sS \
+              -o "${release_response}" \
+              -w '%{http_code}' \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              "${api_root}/releases/tags/${GITHUB_REF_NAME}"
+          )"
+
+          if [[ "${release_status}" != "200" ]]; then
+            create_payload="$(
+              jq -n \
+                --arg tag "${GITHUB_REF_NAME}" \
+                --arg name "${GITHUB_REF_NAME}" \
+                --argjson prerelease "${prerelease}" \
+                '{
+                  tag_name: $tag,
+                  name: $name,
+                  generate_release_notes: true,
+                  prerelease: $prerelease
+                }'
+            )"
+
+            create_status="$(
+              curl -sS \
+                -o "${release_response}" \
+                -w '%{http_code}' \
+                -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'Content-Type: application/json' \
+                -d "${create_payload}" \
+                "${api_root}/releases"
+            )"
+
+            if [[ "${create_status}" != "201" ]]; then
+              cat "${release_response}"
+              exit 1
+            fi
           fi
+
+          gh release upload "${GITHUB_REF_NAME}" \
+            Code/release/*.dmg \
+            Code/release/*.zip \
+            --clobber
