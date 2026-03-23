@@ -62,6 +62,8 @@
         categoryListHasBootAnimated: false,
         pendingCategoryPulseKey: '',
         renewingId: null,
+        renewalEditingRecordId: null,
+        pendingRenewalDeleteId: null,
       }
 
       const $ = (id) => document.getElementById(id)
@@ -96,6 +98,9 @@
         iconPreview: $('iconPreview'),
         iconHelp: $('iconHelp'),
         clearIconBtn: $('clearIconBtn'),
+        editorRenewalSection: $('editorRenewalSection'),
+        editorRenewalEmpty: $('editorRenewalEmpty'),
+        editorRenewalList: $('editorRenewalList'),
         createCategoryBtn: $('createCategoryBtn'),
         globalNotice: $('globalNotice'),
         renewalEditor: $('renewalEditor'),
@@ -354,9 +359,34 @@
         btn.dataset.baseLabel = 'Delete'
       }
 
+      const setButtonLabel = (btn, text) => {
+        if (!(btn instanceof HTMLButtonElement)) return
+        btn.dataset.baseLabel = text
+        btn.textContent = text
+      }
+
+      const syncSubscriptionToLatestRenewal = (subscription, { activate = false, clearWhenEmpty = false } = {}) => {
+        if (!subscription) return
+        const entries = summarizeRenewalHistory(subscription.renewalHistory).entries
+        const latest = entries[0]
+        if (!latest) {
+          if (clearWhenEmpty) {
+            subscription.startDate = ''
+            subscription.endDate = ''
+          }
+          return
+        }
+        subscription.startDate = latest.startDate
+        subscription.endDate = latest.endDate
+        subscription.currency = latest.currency
+        if (activate) subscription.status = 'active'
+      }
+
       const resetRenewalEditor = () => {
         state.renewingId = null
+        state.renewalEditingRecordId = null
         setFormError(dom.renewalEditorError, '')
+        setButtonLabel(dom.renewalSaveBtn, 'Save Renewal')
         setButtonPending(dom.renewalSaveBtn, 'Saving...', false)
         dom.renewalEditorForm?.reset()
         dom.fRenewalCurrency.value = 'CNY'
@@ -370,6 +400,16 @@
         resetRenewalEditor()
         if (dom.renewalEditor.open) {
           dom.renewalEditor.close()
+        }
+      }
+
+      const presentRenewalEditor = () => {
+        try {
+          dom.renewalEditor.showModal()
+        } catch {
+          if (!dom.renewalEditor.open) {
+            dom.renewalEditor.show()
+          }
         }
       }
 
@@ -396,6 +436,7 @@
         const draft = buildRenewalDraft(subscription)
         resetRenewalEditor()
         state.renewingId = subscription.id
+        state.pendingRenewalDeleteId = null
         dom.renewalEditorTitle.textContent = `Renew ${subscription.name}`
         dom.renewalEditorContext.textContent = `Record a payment and update the billing window for ${subscription.name}.`
         dom.fRenewalAmount.value = draft.amount === null ? '' : String(draft.amount)
@@ -403,7 +444,24 @@
         dom.fRenewalPaidAt.value = draft.paidAt
         dom.fRenewalStartDate.value = draft.startDate
         dom.fRenewalEndDate.value = draft.endDate
-        dom.renewalEditor.showModal()
+        presentRenewalEditor()
+      }
+
+      const openRenewalRecordEditor = (subscription, record) => {
+        if (!subscription?.id || !record?.id) return
+        resetRenewalEditor()
+        state.renewingId = subscription.id
+        state.renewalEditingRecordId = record.id
+        state.pendingRenewalDeleteId = null
+        dom.renewalEditorTitle.textContent = `Edit renewal for ${subscription.name}`
+        dom.renewalEditorContext.textContent = 'Update the paid amount and billing window for this renewal record.'
+        setButtonLabel(dom.renewalSaveBtn, 'Save Changes')
+        dom.fRenewalAmount.value = String(record.amount)
+        dom.fRenewalCurrency.value = normalizeCurrency(record.currency)
+        dom.fRenewalPaidAt.value = record.paidAt
+        dom.fRenewalStartDate.value = record.startDate
+        dom.fRenewalEndDate.value = record.endDate
+        presentRenewalEditor()
       }
 
       const collectRenewalForm = () => {
@@ -419,13 +477,102 @@
           throw createEditorValidationError('renewalEndDate', 'End date must be after start date')
         }
         return {
-          id: uid('renew'),
+          id: state.renewalEditingRecordId || uid('renew'),
           paidAt,
           amount,
           currency,
           startDate,
           endDate,
         }
+      }
+
+      const renderEditorRenewalHistory = (subscriptionId = state.editingId) => {
+        const section = dom.editorRenewalSection
+        const empty = dom.editorRenewalEmpty
+        const list = dom.editorRenewalList
+        if (!(section instanceof HTMLElement) || !(empty instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+          return
+        }
+
+        const subscription = state.subscriptions.find((item) => item.id === subscriptionId)
+        if (!subscription?.id) {
+          section.hidden = true
+          empty.hidden = true
+          list.innerHTML = ''
+          state.pendingRenewalDeleteId = null
+          return
+        }
+
+        const entries = summarizeRenewalHistory(subscription.renewalHistory).entries
+        section.hidden = false
+        empty.hidden = entries.length > 0
+        if (!entries.length) {
+          list.innerHTML = ''
+          return
+        }
+
+        list.innerHTML = entries.map((entry, index) => {
+          const amountLabel = formatMoneyLabel(entry.amount, entry.currency)
+          const periodLabel = `${entry.startDate} to ${entry.endDate}`
+          const deleteArmed = state.pendingRenewalDeleteId === entry.id
+          return `
+            <article class="renewal-row ${index === 0 ? 'is-current' : ''}" data-renewal-id="${esc(entry.id)}">
+              <div class="renewal-row__main">
+                <div class="renewal-row__line">
+                  <strong>${esc(amountLabel)}</strong>
+                  <span class="renewal-row__meta">${esc(entry.paidAt)}</span>
+                </div>
+                <div class="renewal-row__line renewal-row__line--muted">
+                  <span>${esc(periodLabel)}</span>
+                  ${index === 0 ? '<span class="renewal-row__badge">Current</span>' : ''}
+                </div>
+              </div>
+              <div class="renewal-row__actions">
+                <button type="button" class="renewal-row__action" data-renewal-action="edit" data-renewal-id="${esc(entry.id)}">Edit</button>
+                <button type="button" class="renewal-row__action renewal-row__action--danger ${deleteArmed ? 'is-armed' : ''}" data-renewal-action="delete" data-renewal-id="${esc(entry.id)}">${deleteArmed ? 'Confirm' : 'Delete'}</button>
+              </div>
+            </article>
+          `
+        }).join('')
+
+        list.querySelectorAll('[data-renewal-action="edit"]').forEach((node) => {
+          if (!(node instanceof HTMLButtonElement)) return
+          node.addEventListener('click', () => {
+            const renewalId = String(node.dataset.renewalId || '')
+            const entry = entries.find((item) => item.id === renewalId)
+            if (!entry) return
+            openRenewalRecordEditor(subscription, entry)
+          })
+        })
+
+        list.querySelectorAll('[data-renewal-action="delete"]').forEach((node) => {
+          if (!(node instanceof HTMLButtonElement)) return
+          node.addEventListener('click', async () => {
+            const renewalId = String(node.dataset.renewalId || '')
+            if (!renewalId) return
+            if (state.pendingRenewalDeleteId !== renewalId) {
+              state.pendingRenewalDeleteId = renewalId
+              renderEditorRenewalHistory(subscription.id)
+              return
+            }
+            state.pendingRenewalDeleteId = null
+            setFormError(dom.editorError, '')
+            try {
+              await runStoreTransaction(() => {
+                const target = state.subscriptions.find((item) => item.id === subscription.id)
+                if (!target) throw new Error('Subscription not found. Reopen and try again.')
+                const nextHistory = summarizeRenewalHistory(target.renewalHistory).entries
+                  .filter((item) => item.id !== renewalId)
+                target.renewalHistory = nextHistory
+                syncSubscriptionToLatestRenewal(target, { clearWhenEmpty: true })
+              })
+              renderEditorRenewalHistory(subscription.id)
+              renderBoard()
+            } catch (err) {
+              setFormError(dom.editorError, err instanceof Error ? err.message : 'Delete renewal failed.')
+            }
+          })
+        })
       }
 
       const submitRenewalSave = async () => {
@@ -450,17 +597,17 @@
             const target = state.subscriptions.find((subscription) => subscription.id === targetId)
             if (!target) throw new Error('Subscription not found. Reopen and try again.')
             const renewalHistory = summarizeRenewalHistory(target.renewalHistory).entries
-            renewalHistory.unshift(payload)
-            target.renewalHistory = renewalHistory
-            target.startDate = payload.startDate
-            target.endDate = payload.endDate
-            target.currency = payload.currency
-            target.status = 'active'
+            const nextHistory = state.renewalEditingRecordId
+              ? renewalHistory.map((entry) => (entry.id === payload.id ? payload : entry))
+              : [payload, ...renewalHistory]
+            target.renewalHistory = summarizeRenewalHistory(nextHistory).entries
+            syncSubscriptionToLatestRenewal(target, { activate: true })
             if (normalizePrice(target.price) === null) {
               target.price = payload.amount
             }
           })
           closeRenewalEditor()
+          renderEditorRenewalHistory(targetId)
           renderBoard()
         } catch (err) {
           setFormError(dom.renewalEditorError, err instanceof Error ? err.message : 'Save renewal failed.')
@@ -1177,7 +1324,7 @@
           : cardStatus === 'cancelled'
             ? 'Cancelled'
             : cardStatus === 'expired'
-              ? 'Renew now'
+              ? 'Expired'
               : `${p.pct}% used`
         const progressTone = cardStatus === 'cancelled'
           ? 'progress-cancelled'
@@ -1477,6 +1624,7 @@
       const resetEditor = () => {
         state.editingId = null
         state.editorIconDataUrl = ''
+        state.pendingRenewalDeleteId = null
         dom.editorTitle.textContent = 'New Subscription'
         syncEditorUtilityActions(null)
         setFormError(dom.editorError, '')
@@ -1493,6 +1641,7 @@
         dom.fEndDate.value = ''
         dom.fCategory.value = ''
         dom.fIconUpload.value = ''
+        renderEditorRenewalHistory('')
         renderEditorIconPreview()
       }
 
@@ -1519,6 +1668,7 @@
             dom.fEndDate.value = endDate
             dom.fNote.value = s.note || ''
             state.editorIconDataUrl = sanitizeIconDataUrl(s.iconDataUrl)
+            renderEditorRenewalHistory(s.id)
           }
           renderEditorIconPreview()
           dom.editor.showModal()
@@ -1585,7 +1735,6 @@
         dom.editorRenewBtn.addEventListener('click', async () => {
           const subscription = state.subscriptions.find((item) => item.id === state.editingId)
           if (!subscription) return
-          await closeEditorWithCardReturn(subscription.id)
           openRenewalEditor(subscription)
         })
       }

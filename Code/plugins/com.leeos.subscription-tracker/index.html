@@ -94,6 +94,13 @@
           </div>
           <input id="fIconUpload" class="icon-upload-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon" />
           <label class="full"><span>Note</span><textarea id="fNote" maxlength="300"></textarea></label>
+          <section id="editorRenewalSection" class="renewal-history full" hidden>
+            <div class="renewal-history__head">
+              <span class="field-label">Renewal history</span>
+            </div>
+            <div id="editorRenewalEmpty" class="renewal-history__empty" hidden>No renewals recorded yet.</div>
+            <div id="editorRenewalList" class="renewal-history__list"></div>
+          </section>
         </div>
         <p id="editorError" class="form-error" hidden></p>
         <div class="modal-actions">
